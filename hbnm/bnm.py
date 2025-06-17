@@ -1,5 +1,5 @@
 import numpy as np
-from model import dmf as dmf_model
+from .model import dmf as dmf_model
 
 class Bnm():
     """

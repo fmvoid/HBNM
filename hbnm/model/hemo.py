@@ -1,8 +1,9 @@
 #! /usr/bin/python
 
 """ Hemodynamic transfer function class for input-state-output. """
-from params.synaptic import S_E_ss as z0
-from utils import clean_builtins
+from .params.synaptic import S_E_ss as z0
+from .utils import clean_builtins
+
 import numpy as np
 from scipy.linalg import solve_lyapunov, eig
 

@@ -1,10 +1,10 @@
 #!/usr/bin/python
 
 """ Dynamic mean field model base class."""
-from utils import cov_to_corr
-from utils import load_model_params
-from hemo import Balloon
-from sim import Sim
+from .utils import cov_to_corr
+from .utils import load_model_params
+from .hemo import Balloon
+from .sim import Sim
 
 from scipy.optimize import fsolve
 from scipy.linalg import solve_lyapunov, eig
@@ -72,7 +72,7 @@ class Model(object):
         # If custom model parameters were provided, load model parameters with corresponding keys
         model_params = load_model_params()
         if syn_params is not None:
-            for key in syn_params.keys():
+            for key in list(syn_params.keys()):
                 model_params[key] = syn_params[key]
 
         # Unstable if Jacobian has eval > 0
@@ -406,7 +406,7 @@ class Model(object):
         #synaptic_state[:, :, 0] = self.state
 
         if self._verbose:
-            print "Beginning simulation."
+            print("Beginning simulation.")
 
         self.delays = delays
         if self.delays:
@@ -419,7 +419,7 @@ class Model(object):
                 self.velocity = velocity
                 self.steps_Delay = np.round(self.distance / (self.velocity * 1e-4 * 1e3)).astype(int)
                 self._S_E_mem = np.tile(self._S_E, (self.steps_Delay.max() + 1, 1)).T
-                self._S_E_vect = self._S_E_mem[range(self._nc), self.steps_Delay]
+                self._S_E_vect = self._S_E_mem[list(range(self._nc)), self.steps_Delay]
 
 
         # Initialize BOLD variables if required
@@ -440,7 +440,7 @@ class Model(object):
         for i in range(1, n_sim_steps):
             if self.delays:
                 self._S_E_mem[:, 0] = self._S_E
-                self._S_E_vect = self._S_E_mem[range(self._nc), self.steps_Delay]
+                self._S_E_vect = self._S_E_mem[list(range(self._nc)), self.steps_Delay]
 
             self._step(dt)
 
@@ -463,10 +463,10 @@ class Model(object):
 
                 if self._verbose:
                     if not (i_save % 1000):
-                        print i_save
+                        print(i_save)
 
         if self._verbose:
-            print "Simulation complete."
+            print("Simulation complete.")
 
         self.sim.t = t
         self.sim.dt = dt_save
@@ -650,7 +650,7 @@ class Model(object):
         """
 
         if self._unstable:
-            if self._verbose: print "System unstable - no solution to Lyapunov equation - exiting"
+            if self._verbose: print("System unstable - no solution to Lyapunov equation - exiting")
             self._cov, self._cov_bold, self._corr_bold, self._corr = None, None, None, None
             return
         else:
