@@ -9,7 +9,7 @@ def load_model_params():
     Returns the model's synaptic parameters defined
     in synaptic.py as a python dictionary.
     """
-    from params import synaptic
+    from .params import synaptic
     params = clean_builtins(vars(synaptic))
     return params
 

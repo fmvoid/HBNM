@@ -33,17 +33,17 @@ class Balloon(object):
             hemo_param_dict = parameters
             for checkkeys in ['V0', 'kappa', 'gamma', 'tau', 'alpha', 'rho', 'k1', 'k2', 'k3']:
                 if not checkkeys in hemo_param_dict.keys():
-                    from params import obata04
+                    from .params import obata04
                     param_dict = clean_builtins(vars(obata04))
                     hemo_param_dict[checkkeys] = param_dict[checkkeys]
         else:
             if parameters == 'obata':
                 # Clean dictionary by removing builtins
-                from params import obata04
+                from .params import obata04
                 hemo_param_dict = clean_builtins(vars(obata04))
             elif parameters == 'friston':
                 # Clean dictionary by removing builtins
-                from params import friston03
+                from .params import friston03
                 hemo_param_dict = clean_builtins(vars(friston03))
             else:
                 raise NotImplementedError("invalid hemodynamic response function parameter set")

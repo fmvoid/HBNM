@@ -609,7 +609,7 @@ class Model(object):
         if builtin:
             return solve_lyapunov(jacobian, -Q)
         else:
-            n = jacobian.shape[0] / self._nc
+            n = jacobian.shape[0] // self._nc
             evals_cc = np.conj(evals)
             Q = spr.csc_matrix(Q)
 
