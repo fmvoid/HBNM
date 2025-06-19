@@ -149,6 +149,7 @@ class Model(object):
         # Set heterogeneity gradients
         if self._raw_hmap is not None:
             hmap_range = np.ptp(self._raw_hmap)
+            # Normalize the values of the hmap and invert them ()
             self._hmap = (-(self._raw_hmap - np.max(self._raw_hmap)) / hmap_range)
 
             hmap_norm = self._raw_hmap - np.min(self._raw_hmap)
@@ -387,6 +388,10 @@ class Model(object):
         sim_seed = np.random.randint(0, 4294967295) if sim_seed is None else sim_seed
         np.random.seed(sim_seed)
 
+        # Ensure Jacobian is computed before integration
+        if self._jacobian is None: 
+            self.set_jacobian()
+
         # Initialize to fixed point
         if from_fixed:
             self._reset_state()
@@ -449,7 +454,7 @@ class Model(object):
 
             # Update state variables
             if not (i % n_save):
-                i_save = i / n_save
+                i_save = i // n_save # integer division 
                 if not save_mem:
                     synaptic_state[:, :, i_save] = self.state
 
@@ -765,7 +770,7 @@ class Model(object):
         Parameters
         ----------
         a : float
-            The interceot term
+            The intercept term
         b : float
             The scaling factor 
 
