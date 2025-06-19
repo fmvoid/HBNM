@@ -13,18 +13,12 @@ data = Data(input_dir, output_dir)
 sc, hmap, fc_obj = data.load_demirtas_data()
 
 # Create a simple brain network
-n_regions = 68
-np.random.seed(42)
-sc = np.random.rand(n_regions, n_regions)
-sc = (sc + sc.T) / 2
-np.fill_diagonal(sc, 0)
-
 # Create model
-model = Bnm(sc)
+model = Bnm(sc, hmap)
 
 # Set parameters
-model.set('w_EI', 1.0)
-model.set('w_EE', 1.0) 
+model.set('w_EI', [1.0, 2.0])
+model.set('w_EE', [1.0, 2.0]) 
 model.set('G', 0.5)
 
 # Run simulation for 1 minute
@@ -33,6 +27,9 @@ model.dmf.integrate(
 )
 
 # ===== GET SIMULATION RESULTS =====
+
+# Set region number
+n_regions = 180
 
 # 1. Get time series data
 
@@ -114,5 +111,5 @@ axes[1, 2].text(0.05, 0.95, f'r = {corr_coef:.3f}', transform=axes[1, 2].transAx
                 bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
 
 plt.tight_layout()
-plt.savefig('simulation_results.png', dpi=300, bbox_inches='tight')
+plt.savefig('simulation_results_real.png', dpi=300, bbox_inches='tight')
 plt.show()
