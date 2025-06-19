@@ -5,6 +5,7 @@ import os
 import pandas as pd
 import nibabel as nib
 import h5py
+from hbnm.model.utils import normalize_sc, linearize_map
 
 class Data:
     """
@@ -207,3 +208,39 @@ class Data:
         data_to_write = output.reshape(np.shape(np.array(of.get_data())))
         new_img = nib.Nifti2Image(data_to_write, affine=of.get_affine(), header=of.get_header())
         nib.save(new_img, filename)
+
+    def load_demirtas_data(self, filename='demirtas_neuron_2019.hdf5', full_brain=False):
+        """
+        Load Demirtas et al. 2019 neuron data
+        
+        Parameters
+        ----------
+        filename : str, optional
+            The HDF5 filename to load
+        full_brain : bool, optional
+            If False (default), returns left hemisphere only (first 180 indices).
+            If True, returns full brain data.
+            
+        Returns
+        -------
+        tuple
+            (sc, hmap, fc_obj) - structural connectivity, heterogeneity map, and functional connectivity
+        """
+        fin = self.load(filename)
+        sc = fin['sc'][:]
+        fc = fin['fc'][:]
+        t1t2 = fin['t1wt2w'][:]
+        fin.close()
+
+        if full_brain:
+            # Return full brain data
+            sc = normalize_sc(sc)
+            fc_obj = fc
+            hmap = linearize_map(t1t2)
+        else:
+            # For left hemisphere, use first 180 indices (default behavior)
+            sc = normalize_sc(sc[:180,:180])
+            fc_obj = fc[:180,:180]
+            hmap = linearize_map(t1t2[:180])
+
+        return sc, hmap, fc_obj

@@ -43,7 +43,7 @@ def cov_to_corr(cov, full_matrix=True):
 
     corr = None
     if full_matrix:
-        nc = cov.shape[0] / 2
+        nc = cov.shape[0] // 2 # integer division
         cov_EE = cov[:nc, :nc]
     else:
         cov_EE = cov

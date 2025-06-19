@@ -53,9 +53,9 @@ class Heterogeneous(Pmc):
 
 def load_data(data):
     fin = data.load('demirtas_neuron_2019.hdf5')
-    sc = fin['sc'].value
-    fc = fin['fc'].value
-    t1t2 = fin['t1wt2w'].value
+    sc = fin['sc'][:]  # Changed from .value to [:]
+    fc = fin['fc'][:]  # Changed from .value to [:]
+    t1t2 = fin['t1wt2w'][:]  # Changed from .value to [:]
     fin.close()
 
     # For left hemisphere, use first 180 indices

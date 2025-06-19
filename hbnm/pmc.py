@@ -1,12 +1,12 @@
 import numpy as np
-from io import Data
-from bnm import Bnm
+from .io import Data
+from .bnm import Bnm
 from abc import ABCMeta, abstractmethod
 from scipy import stats
 from numpy.testing import assert_almost_equal
 import os
 
-class Pmc(object):
+class Pmc(object, metaclass=ABCMeta):
     """
     Class for particle monte carlo optimization
     
@@ -17,7 +17,6 @@ class Pmc(object):
         Available in http://rcmorehead.github.io/SIMPLE-ABC/
         Sunnaker et al. - [Approximate Bayesian Computation](http://www.ncbi.nlm.nih.gov/pmc/articles/PMC3547661/)
     """
-    __metaclass__ = ABCMeta
     def __init__(self, input_directory, output_directory, verbose=True):
         """
         Parameters
@@ -148,7 +147,7 @@ class Pmc(object):
             results = self._run_sampler(self.rejection_threshold, run_id)
 
         if self.verbose:
-            print "Completed sampler# " + str(run_id) + ", writing results..."
+            print("Completed sampler# " + str(run_id) + ", writing results...")
         self.data.save('samples_' + str(run_id + 1) + '.npy', results)
 
     def wrap(self, n_outputs):
@@ -210,7 +209,7 @@ class Pmc(object):
         effective_sample = self._effective_sample_size(weights)
 
         if self.verbose:
-            print "Collecting sampler results for iteration " + str(self.iteration) + "..."
+            print("Collecting sampler results for iteration " + str(self.iteration) + "...")
 
         file_out = self.data.save('iteration_' + str(self.iteration) + '.hdf5')
         file_out.create_dataset('theta', data=theta)
@@ -249,7 +248,7 @@ class Pmc(object):
                     self.run_particle(theta)
                     unstable = self.model.check_stability()
         else:
-            theta_star = theta_prev[:, np.random.choice(xrange(0, theta_prev.shape[1]),
+            theta_star = theta_prev[:, np.random.choice(range(0, theta_prev.shape[1]),
                                                         replace=True, p=weights / weights.sum())]
             while unstable:
                 theta = stats.multivariate_normal.rvs(theta_star, tau_squared)
@@ -292,9 +291,9 @@ class Pmc(object):
 
             if distance < epsilon:
                 if self.verbose:
-                    print "Sampler #" + str(run_id+1)
-                    print "Accepted sample " + str(accepted_count+1) + " of " + str(self.n_particles)
-                    print "Model Fit (1 - distance) = " + str(1.0-distance)
+                    print("Sampler #" + str(run_id+1))
+                    print("Accepted sample " + str(accepted_count+1) + " of " + str(self.n_particles))
+                    print("Model Fit (1 - distance) = " + str(1.0-distance))
 
                 self.get_appendices(run_id)
                 accepted_count += 1
@@ -329,7 +328,7 @@ class Pmc(object):
         if len(t_curr.shape) == 1:
             norm = np.zeros_like(t_curr)
             for i, T in enumerate(t_curr):
-                for j in xrange(t_prev[0].size):
+                for j in range(t_prev[0].size):
                     norm[j] = stats.norm.pdf(T, loc=t_prev[0][j],
                                          scale=tau_2)
                 weights_new[i] = prior[0].pdf(T)/sum(w_old * norm)
@@ -338,14 +337,14 @@ class Pmc(object):
 
         else:
             norm = np.zeros(t_prev.shape[1])
-            for i in xrange(t_curr.shape[1]):
+            for i in range(t_curr.shape[1]):
                 prior_prob = np.zeros(t_curr[:, i].size)
-                for j in xrange(t_curr[:, i].size):
+                for j in range(t_curr[:, i].size):
                     prior_prob[j] = prior[j].pdf(t_curr[:, i][j])
                 #assumes independent priors
                 p = prior_prob.prod()
 
-                for j in xrange(t_prev.shape[1]):
+                for j in range(t_prev.shape[1]):
                     norm[j] = stats.multivariate_normal.pdf(t_curr[:, i], mean=t_prev[:, j], cov=tau_2)
                 weights_new[i] = p/sum(w_old * norm)
 
@@ -380,11 +379,11 @@ class Pmc(object):
             var = sum(w * (x - xbar)**2)
             return var * sumw/(sumw*sumw-sum2)
         else:
-            xbar = [(w*x[i]).sum() for i in xrange(x.shape[0])]
+            xbar = [(w*x[i]).sum() for i in range(x.shape[0])]
             covar = np.zeros((x.shape[0], x.shape[0]))
-            for k in xrange(x.shape[0]):
-                for j in xrange(x.shape[0]):
-                    for i in xrange(x.shape[1]):
+            for k in range(x.shape[0]):
+                for j in range(x.shape[0]):
+                    for i in range(x.shape[1]):
                         covar[j,k] += (x[j,i]-xbar[j])*(x[k,i]-xbar[k]) * w[i]
 
             return covar * sumw/(sumw*sumw-sum2)

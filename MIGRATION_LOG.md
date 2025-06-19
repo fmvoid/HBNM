@@ -30,8 +30,5 @@
 3. Learn the neuroscience as we fix the code
 4. Test with simple examples
 
-## Python 2 → 3 Issues Found
-
-
-## What I'm Learning
-
+### Potential changes
+- What's the best place for the `load_data` function
