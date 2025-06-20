@@ -4,16 +4,23 @@ from hbnm.io import Data
 from hbnm.bnm import Bnm
 from hbnm.model.utils import subdiag, fisher_z
 from scipy.spatial.distance import squareform
-from optimization import load_data
 
-def matrix_plot(ax, x, cmap):
-    ax.pcolormesh(x, cmap=cmap, vmin=0.0, vmax=1.0)
+def matrix_plot(ax, x, cmap, add_colorbar=True, n_ticks=5):
+    im = ax.pcolormesh(x, cmap=cmap, vmin=x.min(), vmax=x.max())
     ax.set_aspect(1)
-    # set axis limits to fit data
     ax.set_xlim([0, x.shape[1]])
     ax.set_ylim([0, x.shape[0]])
     ax.get_xaxis().set_visible(False)
     ax.get_yaxis().set_visible(False)
+    
+    if add_colorbar:
+        cbar = plt.colorbar(im, ax=ax)
+        # Create evenly spaced ticks from min to max
+        ticks = np.linspace(x.min(), x.max(), n_ticks)
+        cbar.set_ticks(ticks)
+        cbar.set_ticklabels([f'{tick:.3f}' for tick in ticks])
+    
+    return im
 
 def reg_plot(ax, x, y):
     ax.spines["right"].set_visible(False)
@@ -29,19 +36,19 @@ def reg_plot(ax, x, y):
 Set directories
 """
 current_path = os.getcwd()
-parent_path = os.path.abspath(os.path.join(current_path, os.pardir))
-input_dir = parent_path + '/data/'
-output_dir = parent_path + '/outputs/'
+# parent_path = os.path.abspath(os.path.join(current_path, os.pardir))
+input_dir = current_path + '/data/'
+output_dir = current_path + '/outputs/'
 
 """
 Load data
 """
 data = Data(input_dir, output_dir)
-sc, hmap, fc_obj = load_data(data)
+sc, hmap, fc_obj = data.load_demirtas_data() # this function may have a confusing name... 
 
 fin = data.load('demirtas_neuron_2019.hdf5', from_output=False)
-theta_heterogeneous = fin['apprx_posterior_heterogeneous'].value
-theta_homogeneous = fin['apprx_posterior_homogeneous'].value
+theta_heterogeneous = fin['apprx_posterior_heterogeneous'][:]
+theta_homogeneous = fin['apprx_posterior_homogeneous'][:]
 fin.close()
 
 """
@@ -60,7 +67,7 @@ heterogeneous.set('G', theta_heterogeneous[4,0])
 heterogeneous.moments_method()
 
 from scipy.stats import pearsonr
-print pearsonr(subdiag(fc_obj), subdiag(heterogeneous.get('corr_bold')))
+print(pearsonr(subdiag(fc_obj), subdiag(heterogeneous.get('corr_bold'))))
 
 """
 Plot
@@ -94,5 +101,5 @@ axes[1][2].set_xticks(np.arange(5)+0.5)
 axes[1][2].set_xticklabels(['wEI min', 'wEI scale', 'wEE min', 'wEE scale', 'g'], minor=False)
 plt.tight_layout()
 
-plt.show()
-plt.savefig('Example_model_fit.png', dpi=100)
+plt.savefig(f'{output_dir}/Example_model_fit.png', dpi=300)
+# plt.show()

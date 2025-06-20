@@ -65,17 +65,17 @@ print(f"Mean synaptic FC: {S_E_fc[np.triu_indices(n_regions, k=1)].mean():.3f}")
 fig, axes = plt.subplots(2, 3, figsize=(15, 10))
 
 # Plot 1: Time series of first 5 regions
-axes[0, 0].plot(time_points[:5000], S_E[:5, :5000].T)  # First 5 seconds
+axes[0, 0].plot(time_points[:30000], S_E[:3, :30000].T)  # First 5 seconds
 axes[0, 0].set_xlabel('Time (s)')
 axes[0, 0].set_ylabel('Synaptic Activity S_E')
-axes[0, 0].set_title('Excitatory Synaptic Activity (first 5 regions)')
+axes[0, 0].set_title('Excitatory Synaptic Activity (first 15 regions)')
 axes[0, 0].legend([f'Region {i+1}' for i in range(5)], fontsize=8)
 
 # Plot 2: BOLD time series
-axes[0, 1].plot(time_points[:5000], BOLD[:5, :5000].T)
+axes[0, 1].plot(time_points[:50000], BOLD[:15, :50000].T)
 axes[0, 1].set_xlabel('Time (s)')
 axes[0, 1].set_ylabel('BOLD Signal (% change)')
-axes[0, 1].set_title('BOLD Signals (first 5 regions)')
+axes[0, 1].set_title('BOLD Signals (first 15 regions)')
 
 # Plot 3: Firing rate distribution
 axes[0, 2].hist(r_E.flatten(), bins=50, alpha=0.7, label='Excitatory')

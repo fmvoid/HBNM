@@ -100,7 +100,7 @@ class Bnm():
 
     def moments_method(self, BOLD = True, *args, **kwargs):
         """
-        Calls moments_method method in the Model class
+        Calls moments_method method in the Model class. Which computes the linearized covariance and the correlation matrices between model variables.
         
         Parameters
         ----------
