@@ -22,7 +22,7 @@ class Data:
         """
         self.input_dir = input_dir
         self.output_dir = output_dir
-        if not os.path.exists(self.output_dir): os.makedirs(self.output_dir)
+        if not os.path.exists(self.output_dir): os.makedirs(self.output_dir, exist_ok=True)
 
     def load(self, filename, numeric=False, type=None, from_path=False, from_output=False, *args, **kwargs):
         """

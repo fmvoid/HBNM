@@ -148,7 +148,17 @@ class Pmc(object, metaclass=ABCMeta):
 
         if self.verbose:
             print("Completed sampler# " + str(run_id) + ", writing results...")
-        self.data.save('samples_' + str(run_id + 1) + '.npy', results)
+        
+        # self.data.save('samples_' + str(run_id + 1) + '.npy', results)
+        
+        # Change filename extension from .npy to .npz
+        filename = 'samples_' + str(run_id + 1) + '.npz'
+        # Use np.savez with named keys instead of self.data.save
+        np.savez(self.data.output_dir + filename,  
+                posterior=results[0],
+                distances=results[1], 
+                accepted_count=results[2],
+                trial_count=results[3])
 
     def wrap(self, n_outputs):
         """
@@ -179,7 +189,17 @@ class Pmc(object, metaclass=ABCMeta):
         n_accepted = np.empty(n_outputs)
         n_total = np.empty(n_outputs)
         for ii in range(n_outputs):
-            results = self.data.load('samples_' + str(ii + 1) + '.npy', from_path=self.data.output_dir)
+            # results = self.data.load('samples_' + str(ii + 1) + '.npy', from_path=self.data.output_dir)
+
+            # Change filename extension from .npy to .npz
+            filename = 'samples_' + str(ii + 1) + '.npz'
+            # Load the npz file and reconstruct the tuple
+            npz_data = np.load(self.data.output_dir + filename)
+            results = (npz_data['posterior'], 
+                    npz_data['distances'],
+                    npz_data['accepted_count'], 
+                    npz_data['trial_count'])
+
             p_theta += [results[0]]
             distance = np.hstack((distance, results[1]))
             n_accepted[ii] = results[2]
@@ -304,6 +324,16 @@ class Pmc(object, metaclass=ABCMeta):
 
         posterior = np.asarray(posterior).T
         distances = np.asarray(distances)
+        # added this as a potential fix to the issue of numpy not being able to save the tuple
+        # the tuple had two arrays and two ints
+        accepted_count = np.asarray(accepted_count)  
+        trial_count = np.asarray(trial_count)
+
+        print("posterior shape:", posterior.shape)
+        print("distances shape:", distances.shape) 
+        print("accepted_count shape:", accepted_count.shape)
+        print("trial_count shape:", trial_count.shape)
+
         return (posterior, distances,
                 accepted_count, trial_count)
 
