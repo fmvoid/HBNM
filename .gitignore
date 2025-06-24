@@ -3,3 +3,5 @@ docs/sphinx/
 docs/.doctrees/
 docs/.buildinfo/
 outputs/
+*.pyc
+__pycache__/
