@@ -66,7 +66,7 @@ class Sim(object):
 
         return
 
-    def time_series(self, var_type='S_E'):
+    def time_series(self, var_type='S_E', return_all=False):
         """Returns the simulated time series for all nodes
         for a given variable type, with each row corresponding
         to a unique node, and each column representing a point
@@ -82,7 +82,10 @@ class Sim(object):
           'f':   normalized inflow rate
           'v':   normalized blood volume
           'q':   normalized deoxyhemoglobin content
-          'y':   BOLD signal (% change) """
+          'y':   BOLD signal (% change) 
+          
+        If return_all=True, returns a dictionary with all available
+        time series, ignoring the var_type parameter."""
 
         syn_keys = ['I_I', 'I_E', 'r_I', 'r_E', 'S_I', 'S_E']
         BOLD_keys = ['x', 'f', 'v', 'q', 'y']
@@ -90,15 +93,33 @@ class Sim(object):
         if not self.has_sim:
             raise Exception("No simulation to use!")
 
-        if var_type in syn_keys:
-            return self.__getattribute__(var_type)
-        elif var_type in BOLD_keys:
+        if return_all:
+            # Return dictionary with all available time series
+            all_series = {}
+            
+            # Add synaptic variables
+            for key in syn_keys:
+                if hasattr(self, key) and getattr(self, key) is not None:
+                    all_series[key] = getattr(self, key)
+            
+            # Add BOLD variables if available
             if self.has_BOLD:
-                return self.__getattribute__(var_type)
-            else:
-                raise Exception("No BOLD data in this simulation.")
+                for key in BOLD_keys:
+                    if hasattr(self, key) and getattr(self, key) is not None:
+                        all_series[key] = getattr(self, key)
+            
+            return all_series
         else:
-            raise Exception('Unrecognized variable type.')
+            # Original single variable behavior
+            if var_type in syn_keys:
+                return self.__getattribute__(var_type)
+            elif var_type in BOLD_keys:
+                if self.has_BOLD:
+                    return self.__getattribute__(var_type)
+                else:
+                    raise Exception("No BOLD data in this simulation.")
+            else:
+                raise Exception('Unrecognized variable type.')
 
     def BOLD_corr(self, t_cutoff=0):
         """Simulated BOLD time series correlations, omitting

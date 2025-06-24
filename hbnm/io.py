@@ -209,7 +209,7 @@ class Data:
         new_img = nib.Nifti2Image(data_to_write, affine=of.get_affine(), header=of.get_header())
         nib.save(new_img, filename)
 
-    def load_demirtas_data(self, filename='demirtas_neuron_2019.hdf5', full_brain=False):
+    def load_demirtas_neuron_2019_data(self, filename='demirtas_neuron_2019.hdf5', full_brain=False):
         """
         Load Demirtas et al. 2019 neuron data
         

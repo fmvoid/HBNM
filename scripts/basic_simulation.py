@@ -10,7 +10,7 @@ input_dir = current_path + '/data/'
 output_dir = current_path + '/outputs/'
 
 data = Data(input_dir, output_dir)
-sc, hmap, fc_obj = data.load_demirtas_data()
+sc, hmap, fc_obj = data.load_demirtas_neuron_2019_data()
 
 # Create a simple brain network
 # Create model

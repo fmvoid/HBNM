@@ -135,10 +135,10 @@ class Pmc(object, metaclass=ABCMeta):
         if self.iteration > 1:
             file_prev = self.data.load('iteration_' + str(self.iteration - 1) + '.hdf5',
                                        from_path=self.data.output_dir)
-            theta_prev = file_prev['theta'].value
-            weights_prev = file_prev['weights'].value
-            tau_squared_prev = file_prev['tau_squared'].value
-            epsilon = file_prev['epsilon'].value
+            theta_prev = file_prev['theta'][:]
+            weights_prev = file_prev['weights'][:]
+            tau_squared_prev = file_prev['tau_squared'][:]
+            epsilon = file_prev['epsilon'][()]
             file_prev.close()
 
             results = self._run_sampler(epsilon, run_id, theta_prev=theta_prev, weights=weights_prev,
@@ -178,10 +178,10 @@ class Pmc(object, metaclass=ABCMeta):
         if self.iteration > 1:
             file_prev = self.data.load('iteration_' + str(self.iteration - 1) + '.hdf5',
                                        from_path=self.data.output_dir)
-            theta_prev = file_prev['theta'].value
-            weights_prev = file_prev['weights'].value
-            tau_squared_prev = file_prev['tau_squared'].value
-            epsilon_prev = file_prev['epsilon'].value
+            theta_prev = file_prev['theta'][:]
+            weights_prev = file_prev['weights'][:]
+            tau_squared_prev = file_prev['tau_squared'][:]
+            epsilon_prev = file_prev['epsilon'][()]
             file_prev.close()
 
         p_theta = []
@@ -328,11 +328,6 @@ class Pmc(object, metaclass=ABCMeta):
         # the tuple had two arrays and two ints
         accepted_count = np.asarray(accepted_count)  
         trial_count = np.asarray(trial_count)
-
-        print("posterior shape:", posterior.shape)
-        print("distances shape:", distances.shape) 
-        print("accepted_count shape:", accepted_count.shape)
-        print("trial_count shape:", trial_count.shape)
 
         return (posterior, distances,
                 accepted_count, trial_count)

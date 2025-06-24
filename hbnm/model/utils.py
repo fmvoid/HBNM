@@ -110,3 +110,4 @@ def inter_indv_var(fc):
             fc_flat[n, :, s] = fc[n, index, s]
     fmv2 = np.array([subdiag(spearmanr(fc_flat[ii])[0]) for ii in xrange(N_regions)])
     return 1.0 - fmv2.mean(1)
+

@@ -1,8 +1,8 @@
 filename="model_optimization.py"
 model_name="heterogeneous"
-n_particles=1
+n_particles=25
 n_tasks=1
-n_iterations=1
+n_iterations=2
 output_directory="heterogeneous"
 
 for iter in {1..1}
