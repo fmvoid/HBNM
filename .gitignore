@@ -5,3 +5,4 @@ docs/.buildinfo/
 outputs/
 *.pyc
 __pycache__/
+*.nii
