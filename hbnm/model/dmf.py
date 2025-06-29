@@ -19,7 +19,7 @@ class Model(object):
     based on provided heterogeneity map.
     """
 
-    def __init__(self, sc, g=0, norm_sc=True, hmap = None,
+    def __init__(self, sc, g=0, norm_sc=True, hmap=None, maps=None,
                  wee=(0.15, 0.), wei=(0.15, 0.),
                  syn_params=None, bold_params='obata',
                  verbose=True):
@@ -34,16 +34,19 @@ class Model(object):
         norm_sc : bool, optional
             Normalize input strengths of the structural connectivity matrix (True by default)
         hmap : ndarray, optional
-            Heterogeneity map to scale local model parameters. 
+            DEPRECATED: Use 'maps' instead. Single heterogeneity map to scale local model parameters.
+        maps : ndarray, optional
+            Biological maps matrix of shape (n_maps, n_regions) or (n_regions,) for single map.
             If None, the model parameters are homogeneous (None by default)
         wee : tuple, optional
             Local recurrent excitatory connectivity weights (w^{EE}). 
-            Requires a tuple with size 2 as (w_{min}, w_{scale}). 
-            (w_{min}=0.15, w_{scale}=0.0 by default)
+            Can be:
+            - Single value: homogeneous
+            - 2-tuple (bias, slope): single-map heterogeneity (backwards compatible)
+            - (n_maps+1)-tuple (bias, c1, c2, ...): multi-map heterogeneity
         wei : tuple, optional
             Local excitatory to inhibitory connectivity weights (w^{EI}). 
-            Requires a tuple with size 2 as (w_{min}, w_{scale}). 
-            (w_{min}=0.15, w_{scale}=0.0 by default)
+            Same format options as wee.
         syn_params : list, optional
             Synaptic dynamical model parameters (None by default)
         bold_params : str, optional
@@ -141,22 +144,24 @@ class Model(object):
         # Add lookup tables for transfer function and its derivatives
         self._phi()
 
-        # Heterogeneity map values for each area
-        self._raw_hmap = hmap
-        self._hamp = 0.0
-        self._hmap_rev = 0.0
-
-        # Set heterogeneity gradients
-        if self._raw_hmap is not None:
-            hmap_range = np.ptp(self._raw_hmap)
-            # Normalize the values of the hmap and invert them ()
-            self._hmap = (-(self._raw_hmap - np.max(self._raw_hmap)) / hmap_range)
-
-            hmap_norm = self._raw_hmap - np.min(self._raw_hmap)
-            self._hmap_rev = hmap_norm / np.max(hmap_norm)
-
-            self._w_EE = self._apply_hierarchy(wee[0], wee[1])
-            self._w_EI = self._apply_hierarchy(wei[0], wei[1])
+        # Handle backwards compatibility for maps
+        if maps is not None and hmap is not None:
+            raise ValueError("Cannot specify both 'hmap' and 'maps'. Use 'maps' for new code.")
+        
+        if hmap is not None:
+            # Convert single map to multi-map format
+            self._maps = hmap[None, :] if hmap.ndim == 1 else hmap
+        else:
+            self._maps = maps
+        
+        # Ensure maps is always 2D: (n_maps, n_regions)
+        if self._maps is not None:
+            if self._maps.ndim == 1:
+                self._maps = self._maps[None, :]  # Shape: (1, n_regions)
+            
+            # Apply maps to parameters if provided
+            self._w_EE = self._apply_maps(wee)
+            self._w_EI = self._apply_maps(wei)
 
         # Set SC normalization
         self._sc_norm = 1.0
@@ -763,32 +768,81 @@ class Model(object):
         """
         return -(self._S_I / self._tau_I) + self._gamma_I * self._r_I
 
-    def _apply_hierarchy(self, a, b):
+    def _apply_maps(self, params):
         """
-        Parametrize model parameters based on the heterogeneity map. 
-                
+        Apply biological maps to generate region-wise parameter values.
+        
         Parameters
         ----------
-        a : float
-            The intercept term
-        b : float
-            The scaling factor 
-
+        params : scalar, array-like, or tuple
+            Parameter specification:
+            - scalar: homogeneous value across all regions
+            - array of length n_regions: explicit per-region values
+            - tuple of length 2: (bias, slope) for single-map heterogeneity
+            - tuple of length n_maps+1: (bias, c1, c2, ...) for multi-map
+        
         Returns
         -------
         ndarray
-            Parameter values varying along heterogeneity gradient given the intercept and scaling
-            factor.
-            
-        Notes
-        -----
-        If b is negative the heterogeneity gradient will be calculated in opposite direction.
+            Parameter values for each region, shape (n_regions,)
+        
+        Examples
+        --------
+        >>> # Homogeneous
+        >>> model._apply_maps(0.15)  # -> [0.15, 0.15, ..., 0.15]
+        
+        >>> # Single-map (backwards compatible)
+        >>> model._apply_maps((0.15, 0.05))  # -> bias + slope * maps[0]
+        
+        >>> # Multi-map
+        >>> model._apply_maps((0.15, 0.02, -0.01, 0.03))  # -> bias + sum(coeffs * maps)
         """
-        if b < 0.0:
-            return a + np.abs(b) * self._hmap_rev
+        # Handle scalar input
+        if np.isscalar(params):
+            return np.full(self._nc, params)
+        
+        # Convert to array for easier handling
+        params = np.asarray(params)
+        
+        # Handle homogeneous case when no maps provided
+        if self._maps is None:
+            if params.size == 1:
+                return np.full(self._nc, params[0])
+            elif params.size == self._nc:
+                return params  # Explicit per-region values
+            else:
+                raise ValueError(f"No biological maps provided, but received {params.size} parameters. "
+                               f"Expected 1 (homogeneous) or {self._nc} (per-region).")
+        
+        # Handle map-based heterogeneity (when maps ARE provided)
+        n_maps = self._maps.shape[0]
+        bias = params[0]
+        
+        if params.size == 1:
+            # Just bias, no heterogeneity
+            return np.full(self._nc, bias)
+        elif params.size == 2 and n_maps >= 1:
+            # Backwards compatible: (bias, slope) uses first map
+            slope = params[1]
+            if slope < 0.0:
+                # Maintain backwards compatibility with negative slope behavior
+                hmap_rev = (self._maps[0] - np.min(self._maps[0])) / np.ptp(self._maps[0])
+                return bias + np.abs(slope) * hmap_rev
+            else:
+                hmap_norm = (-(self._maps[0] - np.max(self._maps[0]))) / np.ptp(self._maps[0])
+                return bias + slope * hmap_norm
+        elif params.size == n_maps + 1:
+            # Multi-map: bias + sum(coefficients * maps)
+            coeffs = params[1:]
+            return bias + np.dot(coeffs, self._maps)
+        # REMOVED THE OPTION TO SET PARAMETERS PER REGION -- MAY CHANGE THAT LATER
+        # elif params.size == self._nc:
+        #     # Explicit per-region values (only as fallback when maps present)
+        #     return params
         else:
-            return a + b * self._hmap
-
+            raise ValueError(f"Parameter size mismatch. Got {params.size} parameters, "
+                            f"expected 1 (homogeneous), 2 (single-map), or {n_maps + 1} (multi-map).")
+    
     # Properties
     @property
     def Q(self):
@@ -998,22 +1052,14 @@ class Model(object):
         """
         Parameters
         -------
-        w : ndarray
+        w : scalar, array-like, or tuple
             Local recurrent excitatory strengths.
-              
-        Notes
-        -----
-        If w is float, sets all strengths to w;
-        if w has N elements (number of regions), sets all strengths to w;
-        if w has size 2, sets w according to heterogeneity map
+            - scalar: homogeneous value
+            - array of length n_regions: explicit per-region values  
+            - tuple of length 2: (bias, slope) for single-map heterogeneity
+            - tuple of length n_maps+1: (bias, c1, c2, ...) for multi-map
         """
-        if isinstance(w, float):
-            self._w_EE = w
-        else:
-            if len(w) == self._nc:
-                self._w_EE = np.array(w)
-            else:
-                self._w_EE = self._apply_hierarchy(w[0], w[1])
+        self._w_EE = self._apply_maps(w)
 
     @property
     def w_EI(self):
@@ -1030,22 +1076,14 @@ class Model(object):
         """
         Parameters
         -------
-        w : ndarray
+        w : scalar, array-like, or tuple
             Local excitatory to inhibitory strengths.
-
-        Notes
-        -----
-        If w is float, sets all strengths to w;
-        if w has N elements (number of regions), sets all strengths to w;
-        if w has size 2, sets w according to heterogeneity map
+            - scalar: homogeneous value
+            - array of length n_regions: explicit per-region values
+            - tuple of length 2: (bias, slope) for single-map heterogeneity  
+            - tuple of length n_maps+1: (bias, c1, c2, ...) for multi-map
         """
-        if isinstance(w, float):
-            self._w_EI = w
-        else:
-            if len(w) == self._nc:
-                self._w_EI = np.array(w)
-            else:
-                self._w_EI = self._apply_hierarchy(w[0], w[1])
+        self._w_EI = self._apply_maps(w)
 
     @property
     def G(self):
@@ -1152,3 +1190,34 @@ class Model(object):
             Effective NMDA conductance  
         """
         self._J_NMDA = J
+
+    @property
+    def maps(self):
+        """
+        Returns
+        -------
+        ndarray or None
+            Biological maps matrix of shape (n_maps, n_regions), or None if homogeneous
+        """
+        return self._maps
+
+    @maps.setter
+    def maps(self, m):
+        """
+        Parameters
+        ----------
+        m : ndarray or None
+            Biological maps matrix of shape (n_maps, n_regions) or (n_regions,) for single map
+            
+        Notes
+        -----
+        Setting new maps will NOT automatically update existing w_EE/w_EI values.
+        You must explicitly reset those parameters after changing maps.
+        """
+        if m is not None:
+            m = np.asarray(m)
+            if m.ndim == 1:
+                m = m[None, :]
+            if m.shape[1] != self._nc:
+                raise ValueError(f"Maps must have {self._nc} regions, got {m.shape[1]}")
+        self._maps = m

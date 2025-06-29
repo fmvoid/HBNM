@@ -6,8 +6,8 @@ from hbnm.model.utils import subdiag, fisher_z
 from scipy.stats import pearsonr
 import os
 
-def analyze_optimization_results(data_path='heterogeneous/', 
-                                iteration_file='iteration_2.hdf5'):
+def analyze_optimization_results(data_path='test_3maps/', 
+                                iteration_file='iteration_1.hdf5'):
     """
     Analyze optimization results to find best parameter sets.
     

@@ -6,35 +6,49 @@ class Bnm():
     Wrapper class for the large-scale computational model.
     """
 
-    def __init__(self, sc, gradient = None, *args, **kwargs):
+    def __init__(self, sc, gradient=None, maps=None, *args, **kwargs):
         """
-
         Parameters
         ----------
         sc : ndarray
             Structural connectivity matrix
         gradient : ndarray, optional
-            Heterogeneity map to scale local model parameters. 
+            DEPRECATED: Use 'maps' instead. Single heterogeneity map to scale local model parameters. 
+            If None, the model parameters are homogeneous (None by default)
+        maps : ndarray, optional
+            Biological maps matrix of shape (n_maps, n_regions) to modulate local model parameters.
             If None, the model parameters are homogeneous (None by default)
         
         Notes
         -----
         The optional arguments and keyword arguments pass to the Model class.
-        If the model is separated for left and right hemispheres, the SC and heterogeneity map
+        If the model is separated for left and right hemispheres, the SC and maps
          should be given as a list as [left, right]. In this case, the wrapper generates 2 models
          as a list in the same order that is [left, right].
-
         """
         self.sc = sc
-        self.gradient = gradient
+        
+        # Handle backwards compatibility: gradient -> maps
+        if maps is not None and gradient is not None:
+            raise ValueError("Cannot specify both 'gradient' and 'maps'. Use 'maps' for new code.")
+        
+        if gradient is not None:
+            # Convert single gradient to maps format
+            if isinstance(gradient, list):
+                self.maps = [g[None, :] if g is not None else None for g in gradient]
+            else:
+                self.maps = gradient[None, :] if gradient is not None else None
+        else:
+            self.maps = maps
 
         if isinstance(self.sc, list):
-            if not isinstance(gradient, list):
-                self.gradient = [self.gradient, self.gradient]
-            self.dmf = [dmf_model.Model(self.sc[ii], g=1.0, hmap=self.gradient[ii],
+            # Handle hemisphere splitting
+            if not isinstance(self.maps, list):
+                self.maps = [self.maps, self.maps]
+            self.dmf = [dmf_model.Model(self.sc[ii], g=1.0, maps=self.maps[ii],
                                         verbose=False, *args, **kwargs) for ii in range(2)]
         else:
-            self.dmf = dmf_model.Model(self.sc, g=1.0, hmap=self.gradient,
+            self.dmf = dmf_model.Model(self.sc, g=1.0, maps=self.maps,
                                        verbose=False, *args, **kwargs)
 
     def set(self, parameter, values, separate = False):
@@ -90,13 +104,25 @@ class Bnm():
             The truth value for the largest eigenvalue of the system is smaller than 0
         
         """
-
-        if isinstance(self.dmf, list):
-            [self.dmf[ii].set_jacobian(compute_fic=compute_FIC) for ii in range(2)]
-            return np.array([self.dmf[ii]._unstable for ii in range(2)]).any()
-        else:
-            self.dmf.set_jacobian(compute_fic=compute_FIC)
-            return self.dmf._unstable
+        try:
+            if isinstance(self.dmf, list):
+                [self.dmf[ii].set_jacobian(compute_fic=compute_FIC) for ii in range(2)]
+                return np.array([self.dmf[ii]._unstable for ii in range(2)]).any()
+            else:
+                self.dmf.set_jacobian(compute_fic=compute_FIC)
+                return self.dmf._unstable
+        except ValueError as e:
+            if "FIC calculation led to negative J values" in str(e):
+                # FIC failure means the system is unstable
+                return True
+            else:
+                # Re-raise other ValueError exceptions
+                raise e
+        except Exception as e:
+            # Any other exception also indicates instability
+            if hasattr(self, 'verbose') and getattr(self, 'verbose', False):
+                print(f"Stability check failed: {e}")
+            return True
 
     def moments_method(self, BOLD = True, *args, **kwargs):
         """
