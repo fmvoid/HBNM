@@ -6,7 +6,7 @@ class Bnm():
     Wrapper class for the large-scale computational model.
     """
 
-    def __init__(self, sc, gradient=None, maps=None, *args, **kwargs):
+    def __init__(self, sc, gradient=None, maps=None, map_invert_flags=None, *args, **kwargs):
         """
         Parameters
         ----------
@@ -18,6 +18,9 @@ class Bnm():
         maps : ndarray, optional
             Biological maps matrix of shape (n_maps, n_regions) to modulate local model parameters.
             If None, the model parameters are homogeneous (None by default)
+        map_invert_flags : list of bool, optional
+            For each biological map, whether to invert it (True) or use direct (False).
+            If None, defaults to [True] for backwards compatibility. Length must match number of maps.
         
         Notes
         -----
@@ -45,10 +48,18 @@ class Bnm():
             # Handle hemisphere splitting
             if not isinstance(self.maps, list):
                 self.maps = [self.maps, self.maps]
+            # Handle map_invert_flags for hemispheric models
+            if map_invert_flags is not None and not isinstance(map_invert_flags[0], list):
+                # Same flags for both hemispheres
+                hemi_invert_flags = [map_invert_flags, map_invert_flags]
+            else:
+                hemi_invert_flags = map_invert_flags
             self.dmf = [dmf_model.Model(self.sc[ii], g=1.0, maps=self.maps[ii],
+                                        map_invert_flags=hemi_invert_flags[ii] if hemi_invert_flags is not None else None,
                                         verbose=False, *args, **kwargs) for ii in range(2)]
         else:
             self.dmf = dmf_model.Model(self.sc, g=1.0, maps=self.maps,
+                                       map_invert_flags=map_invert_flags,
                                        verbose=False, *args, **kwargs)
 
     def set(self, parameter, values, separate = False):

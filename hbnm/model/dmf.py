@@ -22,7 +22,7 @@ class Model(object):
     def __init__(self, sc, g=0, norm_sc=True, hmap=None, maps=None,
                  wee=(0.15, 0.), wei=(0.15, 0.),
                  syn_params=None, bold_params='obata',
-                 verbose=True):
+                 map_invert_flags=None, verbose=True):
         """
         
         Parameters
@@ -51,6 +51,9 @@ class Model(object):
             Synaptic dynamical model parameters (None by default)
         bold_params : str, optional
             Hemodynamic model parameters. 'obata' or 'friston' ('obata' by default)
+        map_invert_flags : list of bool, optional
+            For each biological map, whether to invert it (True) or use direct (False).
+            If None, defaults to [True] for backwards compatibility. Length must match number of maps.
         verbose : bool, optional
             If True, prints diagnostics to console (True by default)  
         
@@ -159,9 +162,27 @@ class Model(object):
             if self._maps.ndim == 1:
                 self._maps = self._maps[None, :]  # Shape: (1, n_regions)
             
+            # Set up inversion flags
+            n_maps = self._maps.shape[0]
+            if map_invert_flags is None:
+                # Default to True for backwards compatibility (T1w/T2w behavior)
+                self._map_invert_flags = [True] * n_maps
+                if verbose:
+                    print(f"Using default invert flags: {self._map_invert_flags}")
+            else:
+                if len(map_invert_flags) != n_maps:
+                    raise ValueError(f"map_invert_flags length ({len(map_invert_flags)}) must match number of maps ({n_maps})")
+                if not all(isinstance(flag, bool) for flag in map_invert_flags):
+                    raise ValueError("All map_invert_flags must be boolean values")
+                self._map_invert_flags = list(map_invert_flags)
+                if verbose:
+                    print(f"Using provided invert flags: {self._map_invert_flags}")
+            
             # Apply maps to parameters if provided
             self._w_EE = self._apply_maps(wee)
             self._w_EI = self._apply_maps(wei)
+        else:
+            self._map_invert_flags = None
 
         # Set SC normalization
         self._sc_norm = 1.0
@@ -822,19 +843,61 @@ class Model(object):
             # Just bias, no heterogeneity
             return np.full(self._nc, bias)
         elif params.size == 2 and n_maps >= 1:
-            # Backwards compatible: (bias, slope) uses first map
+            # Backwards compatible: (bias, slope) uses first map with inversion flags
             slope = params[1]
-            if slope < 0.0:
-                # Maintain backwards compatibility with negative slope behavior
-                hmap_rev = (self._maps[0] - np.min(self._maps[0])) / np.ptp(self._maps[0])
-                return bias + np.abs(slope) * hmap_rev
-            else:
-                hmap_norm = (-(self._maps[0] - np.max(self._maps[0]))) / np.ptp(self._maps[0])
-                return bias + slope * hmap_norm
+            
+            # Use inversion flag if available, otherwise default to True for backwards compatibility
+            should_invert = getattr(self, '_map_invert_flags', [True])[0]
+            
+            # Validate map for normalization
+            map_range = np.ptp(self._maps[0])
+            if map_range == 0:
+                raise ValueError("Map is constant (range=0) - cannot normalize for heterogeneity")
+            if np.any(np.isnan(self._maps[0])):
+                raise ValueError("Map contains NaN values")
+            
+            # Always normalize to [0, 1] first
+            map_normalized = (self._maps[0] - np.min(self._maps[0])) / map_range
+            
+            # Apply inversion if requested
+            if should_invert:
+                map_normalized = 1.0 - map_normalized
+                
+            # Apply coefficient (users can specify negative coefficients if desired)
+            return bias + slope * map_normalized
+            
         elif params.size == n_maps + 1:
-            # Multi-map: bias + sum(coefficients * maps)
+            # Multi-map: bias + sum(coefficients * maps with individual inversion)
             coeffs = params[1:]
-            return bias + np.dot(coeffs, self._maps)
+            result = np.full(self._nc, bias)
+            
+            # Use inversion flags if available, otherwise default to True for all maps
+            invert_flags = getattr(self, '_map_invert_flags', [True] * n_maps)
+            
+            # Validate invert flags
+            if len(invert_flags) != n_maps:
+                raise ValueError(f"Invert flags length ({len(invert_flags)}) doesn't match number of maps ({n_maps})")
+            
+            for i, (coeff, map_vals, should_invert) in enumerate(zip(coeffs, self._maps, invert_flags)):
+                # Validate map for normalization
+                map_range = np.ptp(map_vals)
+                if map_range == 0:
+                    raise ValueError(f"Map {i} is constant (range=0) - cannot normalize")
+                if np.any(np.isnan(map_vals)):
+                    raise ValueError(f"Map {i} contains NaN values")
+                    
+                # Always normalize to [0, 1] first
+                map_normalized = (map_vals - np.min(map_vals)) / map_range
+                
+                # Apply inversion if requested
+                if should_invert:
+                    map_normalized = 1.0 - map_normalized
+                    
+                # Add contribution
+                result += coeff * map_normalized
+                
+            return result
+            
         # REMOVED THE OPTION TO SET PARAMETERS PER REGION -- MAY CHANGE THAT LATER
         # elif params.size == self._nc:
         #     # Explicit per-region values (only as fallback when maps present)

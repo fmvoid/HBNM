@@ -26,7 +26,7 @@ class MultiMapHeterogeneous(Pmc):
         self.n_maps = 0  # Will be set during initialize()
         super().__init__(input_directory, output_directory, verbose)
         
-    def initialize(self, sc, fc=None, maps=None, n_particles=10, 
+    def initialize(self, sc, fc=None, maps=None, map_invert_flags=None, n_particles=10, 
                    rejection_threshold=None, *args, **kwargs):
         """
         Initialize the optimization with data and model.
@@ -39,6 +39,8 @@ class MultiMapHeterogeneous(Pmc):
             Empirical functional connectivity  
         maps : ndarray, optional
             Biological maps matrix of shape (n_maps, n_regions)
+        map_invert_flags : list of bool, optional
+            For each biological map, whether to invert it (True) or use direct (False)
         n_particles : int
             Number of particles for PMC
         rejection_threshold : float
@@ -61,6 +63,7 @@ class MultiMapHeterogeneous(Pmc):
         
         # Initialize parent class (this calls set_prior)
         super().initialize(sc, fc=fc, maps=maps, 
+                          map_invert_flags=map_invert_flags,
                           n_particles=n_particles,
                           rejection_threshold=rejection_threshold,
                           *args, **kwargs)
@@ -73,34 +76,38 @@ class MultiMapHeterogeneous(Pmc):
         """
         Set prior distributions based on number of maps.
         
-        Parameter order in theta:
-        [w_EI_bias, w_EI_coeff_1, ..., w_EI_coeff_k,
-         w_EE_bias, w_EE_coeff_1, ..., w_EE_coeff_k, 
-         G]
-        
-        Total parameters: 2*(n_maps + 1) + 1
+        If called before n_maps is set (from Pmc.__init__), this will set up
+        a placeholder that gets overwritten when called properly from initialize().
         """
-        priors = []
+        # Check if we have valid map information yet
+        if not hasattr(self, 'n_maps') or self.n_maps is None:
+            # Called too early (from Pmc.__init__) - set up placeholder
+            self.prior = [stats.uniform(0, 1)]  # Dummy prior, will be overwritten
+            if self.verbose:
+                print("Setting placeholder priors (will be updated during initialize)")
+            return
         
+        # Normal prior setting logic here...
+        priors = []
         if self.n_maps == 0:
-            # Homogeneous case - can use broader ranges
-            priors.append(stats.uniform(0.001, 2.0))   # w_EI bias
-            priors.append(stats.uniform(0.001, 5.0))   # w_EE bias
+            # Homogeneous case logic
+            priors.append(stats.uniform(0.001, 5.0))   # w_EI bias
+            priors.append(stats.uniform(0.001, 5.0))   # w_EE bias  
             priors.append(stats.uniform(0.001, 5.0))   # G
         else:
-            # Multi-map case - use very tight ranges to prevent FIC failures
+            # Multi-map case logic
             # w_EI parameters: bias + coefficients
-            priors.append(stats.uniform(0.12, 0.06))   # w_EI bias: 0.12 to 0.18
+            priors.append(stats.uniform(0.001, 3.0))   # w_EI bias
             for _ in range(self.n_maps):
-                priors.append(stats.uniform(-0.02, 0.04))  # w_EI coefficients: -0.02 to +0.02
+                priors.append(stats.uniform(0.001, 3.0))  # w_EI coefficients
             
             # w_EE parameters: bias + coefficients  
-            priors.append(stats.uniform(0.12, 0.06))   # w_EE bias: 0.12 to 0.18
+            priors.append(stats.uniform(0.001, 3.0))   # w_EE bias
             for _ in range(self.n_maps):
-                priors.append(stats.uniform(-0.02, 0.04))  # w_EE coefficients: -0.02 to +0.02
+                priors.append(stats.uniform(0.001, 3.0))  # w_EE coefficients
             
             # Global coupling - reasonable range
-            priors.append(stats.uniform(1.0, 2.0))     # G: 1.0 to 3.0
+            priors.append(stats.uniform(0.001, 5.0))     # G
         
         self.prior = priors
         

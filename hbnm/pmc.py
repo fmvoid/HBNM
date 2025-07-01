@@ -84,7 +84,7 @@ class Pmc(object, metaclass=ABCMeta):
             Summary distance statistic 
         """
 
-    def initialize(self, sc, fc=None, gradient=None,
+    def initialize(self, sc, fc=None, gradient=None, maps=None, map_invert_flags=None,
             n_particles=10, rejection_threshold=None,
             *args, **kwargs):
         """
@@ -97,7 +97,11 @@ class Pmc(object, metaclass=ABCMeta):
         fc : ndarray
             Empirical functional connectivity
         gradient : ndarray or list
-            Heterogeneity map to parametrize the model
+            DEPRECATED: Use 'maps' instead. Heterogeneity map to parametrize the model
+        maps : ndarray or list
+            Biological maps to parametrize the model
+        map_invert_flags : list of bool, optional
+            For each biological map, whether to invert it (True) or use direct (False)
         n_particles : int
             Maximum number of particles
         rejection_threshold : float
@@ -111,7 +115,16 @@ class Pmc(object, metaclass=ABCMeta):
         where N_connections is the number of connections, i.e. N x (N-1)/2, and N_subjects
         is the number of subjects.
         """
-        self.model = Bnm(sc, gradient = gradient, *args, **kwargs)
+        # Handle backwards compatibility
+        if maps is not None and gradient is not None:
+            raise ValueError("Cannot specify both 'gradient' and 'maps'. Use 'maps' for new code.")
+        
+        if gradient is not None:
+            # Use gradient (backwards compatible)
+            self.model = Bnm(sc, gradient=gradient, map_invert_flags=map_invert_flags, *args, **kwargs)
+        else:
+            # Use maps (new approach)
+            self.model = Bnm(sc, maps=maps, map_invert_flags=map_invert_flags, *args, **kwargs)
         self.fc_objective = fc
         self.n_particles = n_particles
         self.rejection_threshold = rejection_threshold

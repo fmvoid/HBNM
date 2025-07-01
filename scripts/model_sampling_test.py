@@ -6,7 +6,7 @@ from hbnm.model.utils import subdiag, fisher_z
 from scipy.spatial.distance import squareform
 
 
-### TODO MAYBE MOVE THIS TO THE UTILS ###
+### TODO MAYBE MOVE THIS TO THE UTILS or to the analysis.py file ###
 def matrix_plot(ax, x, cmap, add_colorbar=True, n_ticks=5):
     im = ax.pcolormesh(x, cmap=cmap, vmin=x.min(), vmax=x.max())
     ax.set_aspect(1)

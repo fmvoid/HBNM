@@ -6,6 +6,93 @@ from hbnm.model.utils import subdiag, fisher_z
 from scipy.stats import pearsonr
 from optimization import load_data
 
+def get_default_invert_flags(map_names):
+    """
+    Auto-determine inversion flags based on biological knowledge.
+    
+    Parameters
+    ----------
+    map_names : list of str
+        Names of biological maps
+        
+    Returns
+    -------
+    list of bool
+        Inversion flag for each map
+        
+    Notes
+    -----
+    Maps that should be INVERTED (negative biological relationship with synaptic strength):
+    - T1w/T2w maps: Higher T1w/T2w (sensory) → Lower synaptic strength
+    
+    Maps that should be DIRECT (positive biological relationship with synaptic strength):
+    - NMDA receptor maps: Higher NMDA density → Higher excitatory strength
+    - AMPA receptor maps: Higher AMPA density → Higher excitatory strength
+    - Glutamate receptor maps: Higher glutamate → Higher excitatory strength
+    """
+    invert_flags = []
+    
+    for name in map_names:
+        name_lower = name.lower()
+        
+        # Maps that should be INVERTED (negative biological relationship)
+        if any(keyword in name_lower for keyword in ['t1w', 't2w', 't1wt2w', 'myelin']):
+            invert_flags.append(True)
+            print(f"  - {name}: INVERTED (negative correlation with synaptic strength)")
+            
+        # Maps that should be DIRECT (positive biological relationship)  
+        elif any(keyword in name_lower for keyword in ['nmda', 'grin', 'ampa', 'glut', 'nr2']):
+            invert_flags.append(False)
+            print(f"  - {name}: DIRECT (positive correlation with synaptic strength)")
+            
+        # Default: assume direct relationship for unknown maps
+        else:
+            print(f"  Warning: Unknown map type '{name}'. Assuming DIRECT relationship.")
+            print(f"           If this is incorrect, use custom invert flags.")
+            invert_flags.append(False)
+            
+    return invert_flags
+
+def validate_maps_and_flags(maps, invert_flags, map_names):
+    """
+    Bulletproof validation with clear error messages.
+    
+    Parameters
+    ----------
+    maps : ndarray
+        Biological maps matrix (n_maps, n_regions)
+    invert_flags : list of bool
+        Inversion flags for each map
+    map_names : list of str
+        Names of the maps
+        
+    Raises
+    ------
+    ValueError
+        If validation fails
+    """
+    # Check counts match
+    if len(invert_flags) != maps.shape[0]:
+        raise ValueError(f"Mismatch: {len(invert_flags)} invert flags for {maps.shape[0]} maps")
+        
+    if len(map_names) != maps.shape[0]:
+        raise ValueError(f"Mismatch: {len(map_names)} map names for {maps.shape[0]} maps")
+        
+    # Check for problematic maps
+    for i, (name, flag, map_data) in enumerate(zip(map_names, invert_flags, maps)):
+        if np.ptp(map_data) == 0:
+            raise ValueError(f"Map '{name}' (index {i}) is constant - cannot normalize")
+            
+        if np.any(np.isnan(map_data)):
+            raise ValueError(f"Map '{name}' (index {i}) contains NaN values")
+            
+        if np.any(np.isinf(map_data)):
+            raise ValueError(f"Map '{name}' (index {i}) contains infinite values")
+            
+    print("✓ Map validation passed")
+    print(f"  Maps: {map_names}")
+    print(f"  Invert flags: {invert_flags}")
+
 def load_biological_maps(data, map_names=None, linearize=False):
     """
     Load biological maps for multi-map optimization.
@@ -39,7 +126,16 @@ def load_biological_maps(data, map_names=None, linearize=False):
     if map_names is None:
         # Default: only T1w/T2w map (backwards compatible)
         _, hmap, _ = load_data(data)
-        return hmap[None, :]  # Shape: (1, n_regions)
+        maps = hmap[None, :]  # Shape: (1, n_regions)
+        
+        # T1w/T2w should be inverted (Demirtas methodology)
+        invert_flags = [True]
+        map_names = ['t1wt2w']
+        
+        print(f"Loaded default T1w/T2w map (backwards compatible)")
+        print(f"Invert flags: {invert_flags}")
+        
+        return maps, invert_flags
     
     maps_list = []
     maps_dir = os.path.join(data.input_dir, 'maps')
@@ -93,7 +189,14 @@ def load_biological_maps(data, map_names=None, linearize=False):
     maps = np.vstack(maps_list)
     print(f"Loaded {len(maps_list)} biological maps with {maps.shape[1]} regions each")
     
-    return maps
+    # Generate invert flags based on map names
+    print(f"\nDetermining invert flags based on biological knowledge:")
+    invert_flags = get_default_invert_flags(map_names)
+    
+    # Validate everything
+    validate_maps_and_flags(maps, invert_flags, map_names)
+    
+    return maps, invert_flags
 
 if __name__ == '__main__':
     """
@@ -108,6 +211,7 @@ if __name__ == '__main__':
     6- append to output directory
     7- (optional) biological map names separated by commas (e.g., 'NMDA_avg,GRIN1,GRIN2A')
     8- (optional) linearize flag: 'linearize' or 'no_linearize' (default: 'no_linearize')
+    9- (optional) invert flags: bool value, comma separated
     
     Examples:
     python multi_map_optim.py homogeneous 1000 10 0 sampler test_homo
@@ -128,6 +232,7 @@ if __name__ == '__main__':
     # Optional: biological map names
     biological_maps = None
     linearize_maps = False
+    custom_invert_flags = None
     
     if len(sys.argv) > 7:
         map_names = sys.argv[7].split(',')
@@ -141,6 +246,25 @@ if __name__ == '__main__':
             linearize_maps = False
         else:
             print(f"Warning: Unknown linearize flag '{sys.argv[8]}'. Using default (no_linearize).")
+    
+    # Optional: custom invert flags (9th argument)
+    if len(sys.argv) > 9:
+        try:
+            custom_flags = sys.argv[9].split(',')
+            custom_invert_flags = []
+            for flag in custom_flags:
+                flag_lower = flag.lower().strip()
+                if flag_lower in ['true', 't', '1', 'yes', 'invert']:
+                    custom_invert_flags.append(True)
+                elif flag_lower in ['false', 'f', '0', 'no', 'direct']:
+                    custom_invert_flags.append(False)
+                else:
+                    raise ValueError(f"Invalid invert flag: '{flag}'. Use true/false.")
+            print(f"Using custom invert flags: {custom_invert_flags}")
+        except Exception as e:
+            print(f"Error parsing custom invert flags: {e}")
+            print("Using smart defaults instead.")
+            custom_invert_flags = None
 
     # Set directories
     current_path = os.getcwd()
@@ -184,11 +308,19 @@ if __name__ == '__main__':
         if biological_maps is not None:
             print(f"Loading biological maps: {biological_maps}")
             print(f"Linearization: {'enabled' if linearize_maps else 'disabled'}")
-            maps = load_biological_maps(data, biological_maps, linearize=linearize_maps)
+            maps, invert_flags = load_biological_maps(data, biological_maps, linearize=linearize_maps)
+            
+            # Override with custom flags if provided
+            if custom_invert_flags is not None:
+                if len(custom_invert_flags) != len(biological_maps):
+                    raise ValueError(f"Custom invert flags length ({len(custom_invert_flags)}) must match number of maps ({len(biological_maps)})")
+                invert_flags = custom_invert_flags
+                print(f"Overriding with custom invert flags: {invert_flags}")
         else:
             # Default to single T1w/T2w map if no maps specified
             print("No biological maps specified, using default T1w/T2w map")
             maps = hmap[None, :]
+            invert_flags = [True]  # T1w/T2w should be inverted
         
         # If model_type is a number, verify it matches the number of maps
         if model_type.isdigit():
@@ -197,7 +329,7 @@ if __name__ == '__main__':
                 raise ValueError(f"Expected {expected_maps} maps but loaded {maps.shape[0]} maps")
         
         pmc_opt = MultiMapHeterogeneous(input_dir, output_dir + append_directory + '/')
-        pmc_opt.initialize(sc, fc=fc_obj, maps=maps, n_particles=n_samples,
+        pmc_opt.initialize(sc, fc=fc_obj, maps=maps, map_invert_flags=invert_flags, n_particles=n_samples,
                           rejection_threshold=rejection_threshold, norm_sc=True)
         
         print(f"Initialized multi-map model with:")
