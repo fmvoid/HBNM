@@ -10,8 +10,8 @@ start_time=$(date)
 echo "Started at: $start_time"
 
 # Run homogeneous baseline
-echo -e "\n[1/4] Running Homogeneous Model..."
-./run_baseline_homogeneous.sh
+# echo -e "\n[1/4] Running Homogeneous Model..."
+# ./run_baseline_homogeneous.sh
 
 # Run heterogeneous baseline  
 echo -e "\n[2/4] Running Heterogeneous Model..."

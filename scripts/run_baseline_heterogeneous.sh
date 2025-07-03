@@ -20,7 +20,7 @@ echo "=== Running Baseline Heterogeneous Model (T1w/T2w) ==="
 echo "Expected parameters: w_EI_bias, w_EI_slope, w_EE_bias, w_EE_slope, G (5 total)"
 echo "Output: outputs/${output_directory}/"
 
-for iter in {1..10}
+for iter in {1..5}
 do
 for samplers in {0..4}
 do

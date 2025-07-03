@@ -21,7 +21,7 @@ echo "Expected parameters: w_EI_bias, w_EI_coeff1, w_EI_coeff2, w_EE_bias, w_EE_
 echo "Maps: T1w/T2w (inverted), NMDA_avg (direct) - both linearized"
 echo "Output: outputs/${output_directory}/"
 
-for iter in {1..10}
+for iter in {1..3}
 do
 for samplers in {0..4}
 do
