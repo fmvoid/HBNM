@@ -21,14 +21,14 @@ echo "Expected parameters: w_EI_bias, w_EI_coeff1, w_EI_coeff2, w_EE_bias, w_EE_
 echo "Maps: T1w/T2w (inverted), NMDA_avg (direct) - both linearized"
 echo "Output: outputs/${output_directory}/"
 
-for iter in {1..3}
+for iter in {1..2}
 do
 for samplers in {0..4}
 do
-python $filename $model_name $n_particles $n_tasks $samplers sampler $output_directory t1wt2w,NMDA_avg linearize &
+python $filename $model_name $n_particles $n_tasks $samplers sampler $output_directory t1wt2w,nmda/NMDA_avg linearize &
 done
 wait
-python $filename $model_name $n_particles $n_tasks 0 wrapper $output_directory t1wt2w,NMDA_avg linearize
+python $filename $model_name $n_particles $n_tasks 0 wrapper $output_directory t1wt2w,nmda/NMDA_avg linearize
 done
 
 echo "=== Multi-map NMDA model optimization completed ==="

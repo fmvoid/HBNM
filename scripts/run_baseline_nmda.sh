@@ -8,6 +8,7 @@ n_particles=300
 n_tasks=1  
 output_directory="baseline_nmda"
 
+
 # Threading settings (MacBook Pro M3 14 Cores (10P; 4E))
 export OMP_NUM_THREADS=3
 export MKL_NUM_THREADS=3
