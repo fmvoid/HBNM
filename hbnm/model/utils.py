@@ -61,7 +61,11 @@ def fisher_z(r):
     """
     Perform Fisher z-tranform to the correlation matrix
     """
-    return np.arctanh(r)
+    # Clip correlation values to avoid inf/nan in arctanh
+    # arctanh is only defined for values in (-1, 1)
+    eps = 1e-15  # Small epsilon to avoid exact ±1 values
+    r_clipped = np.clip(r, -1 + eps, 1 - eps)
+    return np.arctanh(r_clipped)
 
 def subdiag(x):
     """

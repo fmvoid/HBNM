@@ -49,10 +49,40 @@ class SimulationAnalyzer:
                 'param_names': ['w_EI_bias', 'w_EI_slope', 'w_EE_bias', 'w_EE_slope', 'G'],
                 'description': 'Single-map heterogeneous model (T1w/T2w)'
             },
-            'multimap_nmda_only': {
+            'receptor_nmda': {
                 'n_params': 5,
                 'param_names': ['w_EI_bias', 'w_EI_coeff', 'w_EE_bias', 'w_EE_coeff', 'G'],
-                'description': 'Multi-map model (NMDA_avg map)'
+                'description': 'Single-map heterogeneous model (NMDA_avg map)'
+            },
+            'receptor_dopamine_avg': {
+                'n_params': 5,
+                'param_names': ['w_EI_bias', 'w_EI_coeff', 'w_EE_bias', 'w_EE_coeff', 'G'],
+                'description': 'Single-map heterogeneous model (dopamine_avg map)'
+            },
+            'receptor_serotonin_avg': {
+                'n_params': 5,
+                'param_names': ['w_EI_bias', 'w_EI_coeff', 'w_EE_bias', 'w_EE_coeff', 'G'],
+                'description': 'Single-map heterogeneous model (serotonin_avg map)'
+            },
+            'receptor_norepinephrine_avg': {
+                'n_params': 5,
+                'param_names': ['w_EI_bias', 'w_EI_coeff', 'w_EE_bias', 'w_EE_coeff', 'G'],
+                'description': 'Single-map heterogeneous model (norepinephrine_avg map)'
+            },
+            'receptor_nicotinic_avg': {
+                'n_params': 5,
+                'param_names': ['w_EI_bias', 'w_EI_coeff', 'w_EE_bias', 'w_EE_coeff', 'G'],
+                'description': 'Single-map heterogeneous model (nicotinic_avg map)'
+            },
+            'receptor_muscarinic_avg': {
+                'n_params': 5,
+                'param_names': ['w_EI_bias', 'w_EI_coeff', 'w_EE_bias', 'w_EE_coeff', 'G'],
+                'description': 'Single-map heterogeneous model (muscarinic_avg map)'
+            },
+            'receptor_gaba_a_avg': {
+                'n_params': 5,
+                'param_names': ['w_EI_bias', 'w_EI_coeff', 'w_EE_bias', 'w_EE_coeff', 'G'],
+                'description': 'Single-map heterogeneous model (gaba_a_avg map)'
             }
         }
     

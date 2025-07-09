@@ -36,12 +36,12 @@ def get_default_invert_flags(map_names):
         name_lower = name.lower()
         
         # Maps that should be INVERTED (negative biological relationship)
-        if any(keyword in name_lower for keyword in ['t1w', 't2w', 't1wt2w', 'myelin']):
+        if any(keyword in name_lower for keyword in ['t1wt2w', 'myelin', 'gaba']):
             invert_flags.append(True)
             print(f"  - {name}: INVERTED (negative correlation with synaptic strength)")
             
         # Maps that should be DIRECT (positive biological relationship)  
-        elif any(keyword in name_lower for keyword in ['nmda', 'grin', 'ampa', 'glut', 'nr2']):
+        elif any(keyword in name_lower for keyword in ['nmda', 'dopamine', 'norepinephrine']):
             invert_flags.append(False)
             print(f"  - {name}: DIRECT (positive correlation with synaptic strength)")
             
