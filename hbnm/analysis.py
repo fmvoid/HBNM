@@ -268,7 +268,17 @@ class SimulationAnalyzer:
         # Get parameter info
         param_info = self.parameter_info.get(simulation, {})
         n_params = param_info.get('n_params', data['theta'][0].shape[0])
-        param_names = param_info.get('param_names', [f'param_{i}' for i in range(n_params)])
+        
+        # Determine parameter names based on number of parameters
+        if 'param_names' in param_info:
+            param_names = param_info['param_names']
+        else:
+            if n_params == 3:
+                param_names = ['w_EI', 'w_EE', 'G']
+            elif n_params == 5:
+                param_names = ['w_EI_bias', 'w_EI_slope', 'w_EE_bias', 'w_EE_slope', 'G']
+            else:
+                param_names = [f'param_{i}' for i in range(n_params)]
         
         stats = {
             'param_names': param_names,
@@ -609,6 +619,7 @@ class SimulationAnalyzer:
             final_distance = np.min(data['distances'][-1])
             n_iterations = len(data['iterations'])
             n_params = data['theta'][0].shape[0]
+            n_samples = data['theta'][0].shape[1]
             
             summary_data.append({
                 'Simulation': simulation,
@@ -619,6 +630,7 @@ class SimulationAnalyzer:
                 'Final_ESS': f"{final_ess:.1f}",
                 'Best_Distance': f"{best_distance:.4f}",
                 'Final_Distance': f"{final_distance:.4f}",
+                'Number of Samples': f"{n_samples}",
                 'Description': self.parameter_info.get(simulation, {}).get('description', 'Unknown')
             })
         

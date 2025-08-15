@@ -364,12 +364,314 @@ class Model(object):
             power[:,:,i] = (np.dot(np.dot((self.hemo.B), hemo_power), (self.hemo.B.conj().T)))
         return power
 
+    # def integrate(self, t,
+    #             dt=1e-4, n_save=10, stimulation=0.0,
+    #             delays=False, distance=None, velocity=None,
+    #             include_BOLD=True, from_fixed=True,
+    #             sim_seed=None, save_mem=False):
+    #     """Computes cross-spectral density of hemodynamic variables.
+
+    #     Parameters
+    #     ----------
+    #     t : int
+    #         Total simulation time in seconds.
+    #     dt : float, optional
+    #         Integration time step in seconds. By default dt is 0.1 msec.
+    #     n_save : int, optional
+    #         Sampling rate (time points). By default n_save is 10, therefore in dt is 0.1 msec,
+    #         all the variables will be sampled at 1 msec.
+    #     stimulation : ndarray or float, optional
+    #         An array or matrix containing external currents if required.
+    #         The size of the array should match the number time points (int(t / dt + 1))
+    #         or it may be a scalar (0.0 by default).
+    #     delays : bool, optional
+    #         If True, delays are included during the integration (False by default).
+    #     distance : ndarray, optional
+    #         Distance matrix for delays (mm).
+    #     velocity : float, optional
+    #         Conduction velocity (m/sec).
+    #     include_BOLD : boolean, optional
+    #         If True, include hemodynamic model and BOLD signals (True by default).
+    #     from_fixed : boolean, optional
+    #         If True, start from steady‐state; else continue from last values.
+    #     sim_seed : int, optional
+    #         Seed for random number generator.
+    #     save_mem : bool, optional
+    #         If True, only keep minimal records for memory savings.
+
+    #     Returns
+    #     -------
+    #     None
+
+    #     Notes
+    #     -----
+    #     After simulation, excitatory synaptic variable is in self.sim.S_E
+    #     and BOLD signals in self.sim.y (if include_BOLD=True).
+    #     """
+
+    #     # Seed RNG
+    #     sim_seed = np.random.randint(0, 2**32 - 1) if sim_seed is None else sim_seed
+    #     np.random.seed(sim_seed)
+
+    #     # Prep
+    #     if self._jacobian is None:
+    #         self.set_jacobian()
+    #     if from_fixed:
+    #         self._reset_state()
+    #         self.hemo.reset_state()
+
+    #     # Time discretization
+    #     dt_save    = dt * n_save
+    #     n_sim_steps  = int(t / dt) + 1
+    #     n_save_steps = int(t / dt_save) + 1
+
+    #     # Preprocess stimulation into shape (n_sim_steps, nc)
+    #     if np.isscalar(stimulation):
+    #         stim_array = np.full((n_sim_steps, self.nc), stimulation)
+    #     else:
+    #         stim_array = np.array(stimulation)
+    #         # 1d → broadcast to all nodes
+    #         if stim_array.ndim == 1:
+    #             if stim_array.size != n_sim_steps:
+    #                 raise ValueError(
+    #                     f"stimulation length {stim_array.size} != {n_sim_steps}")
+    #             stim_array = np.tile(stim_array[:, None], (1, self.nc))
+    #         elif stim_array.shape != (n_sim_steps, self.nc):
+    #             raise ValueError(
+    #                 f"stimulation shape {stim_array.shape} must be "
+    #                 f"(n_sim_steps, nc)={ (n_sim_steps, self.nc) }")
+
+    #     # Allocate storage
+    #     if not save_mem:
+    #         synaptic_state = np.zeros((6, self.nc, n_save_steps))
+    #         synaptic_state[..., 0] = self.state
+
+    #     if include_BOLD:
+    #         if save_mem:
+    #             hemo_state = np.zeros((self.nc, n_save_steps))
+    #         else:
+    #             hemo_state = np.zeros((5, self.nc, n_save_steps))
+    #             hemo_state[:3, ..., 0] = 1.  # initial conditions
+
+    #     if self._verbose:
+    #         print("Beginning simulation.")
+
+    #     # Main integration loop (no delays branch assumed)
+    #     for i in range(1, n_sim_steps):
+    #         # Inject external input for this time step
+    #         self._I_ext = stim_array[i]
+
+    #         # Step synaptic dynamics
+    #         self._step(dt)
+
+    #         # On save‐points, record
+    #         if (i % n_save) == 0:
+    #             i_save = i // n_save
+    #             if not save_mem:
+    #                 synaptic_state[..., i_save] = self.state
+
+    #             if include_BOLD:
+    #                 # hemodynamic update uses S_E deviation from SS
+    #                 self.hemo.step(dt * 10., self._S_E - self._S_E_ss)
+    #                 if save_mem:
+    #                     hemo_state[:, i_save] = self.hemo._y
+    #                 else:
+    #                     hemo_state[..., i_save] = self.hemo.state
+
+    #             if self._verbose and (i_save % 1000) == 0:
+    #                 print(f"Saved step {i_save}/{n_save_steps}")
+
+    #     if self._verbose:
+    #         print("Simulation complete.")
+
+    #     # Package results
+    #     self.sim.t        = t
+    #     self.sim.dt       = dt_save
+    #     self.sim.n_save   = n_save
+    #     self.sim.t_points = np.linspace(0, t, n_save_steps)
+    #     self.sim.seed     = sim_seed
+
+    #     if not save_mem:
+    #         (self.sim.I_I, self.sim.I_E,
+    #         self.sim.r_I, self.sim.r_E,
+    #         self.sim.S_I, self.sim.S_E) = synaptic_state
+
+    #     if include_BOLD:
+    #         if save_mem:
+    #             self.sim.y = hemo_state
+    #         else:
+    #             (self.sim.x, self.sim.f,
+    #             self.sim.v, self.sim.q,
+    #             self.sim.y) = hemo_state
+
+    #     return
+
+
+
+    # def integrate(self, t,
+    #               dt=1e-4, n_save=10, stimulation=0.0,
+    #               delays=False, distance=None, velocity=None,
+    #               include_BOLD=True, from_fixed=True,
+    #               sim_seed=None, save_mem=False):
+    #     """Computes cross-spectral density of hemodynamic variables.
+
+    #     Parameters
+    #     ----------
+    #     t : int
+    #         Total simulation time in seconds.
+    #     dt : float, optional
+    #         Integration time step in seconds. By default dt is 0.1 msec.
+    #     n_save : int, optional
+    #         Sampling rate (time points). By default n_save is 10, therefore in dt is 0.1 msec, all the 
+    #         variables will be sampled at 1 msec.
+    #     stimulation : ndarray or float, optional
+    #         An array or matrix containing external currents if required. The size of array should match
+    #         to the number time points (i.e. int(t / dt + 1)) (0.0 by default)
+    #     delays : bool, optional
+    #         If True, delays are included during the integration (False by default)
+    #     distance : ndarray, optional
+    #         The distance matrix, If delays will be taken into account. The distance matrix should contain
+    #         the euclidean or geodesic distance between regions in mm.
+    #     velocity : float, optional
+    #         The conduction velocity in m/sec, if conduction delays are not ignored.
+    #     include_BOLD : boolean, optional
+    #         If True, the simulation will also include hemodynamic model and BOLD signals (True by default)
+    #     from_fixed : boolean, optional
+    #         If True, the simulation will begin using steady state values of the parameters,
+    #         otherwise the last available values will be used (i.e. from previous simulations...etc.)
+    #     sim_seed : int, optional
+    #         The seed for random number generator.
+        
+        
+    #     Returns
+    #     -------
+    #     None
+            
+    #     Notes
+    #     -----
+    #         This method simulates the system for the given simulation time and the parameter values are stored.
+    #         After successfull simulation, The excitatory synaptic variables can be obtained by .sim.S_E or 
+    #         BOLD signals can be obtained by .sim.y
+    #     """
+
+    #     sim_seed = np.random.randint(0, 4294967295) if sim_seed is None else sim_seed
+    #     np.random.seed(sim_seed)
+
+    #     # Ensure Jacobian is computed before integration
+    #     if self._jacobian is None: 
+    #         self.set_jacobian()
+
+    #     # Initialize to fixed point
+    #     if from_fixed:
+    #         self._reset_state()
+    #         self.hemo.reset_state()
+
+    #     # Simulation parameters
+    #     dt_save = dt * n_save
+    #     n_sim_steps = int(t / dt + 1)
+    #     n_save_steps = int(t / dt_save + 1)
+
+    #     # Synaptic state record
+    #     if not save_mem:
+    #         synaptic_state = np.zeros((6, self.nc, n_save_steps))
+    #         synaptic_state[:, :, 0] = self.state
+    #     # Synaptic state record
+    #     #synaptic_state = np.zeros((6, self.nc, n_save_steps))
+    #     #synaptic_state[:, :, 0] = self.state
+
+    #     if self._verbose:
+    #         print("Beginning simulation.")
+
+    #     self.delays = delays
+    #     if self.delays:
+    #         if distance is None or velocity is None:
+    #             self.delays = False
+    #             msg = "Distance matrix and transmission velocity to implement delays"
+    #             raise NotImplementedError(msg)
+    #         else:
+    #             self.distance = distance
+    #             self.velocity = velocity
+    #             self.steps_Delay = np.round(self.distance / (self.velocity * 1e-4 * 1e3)).astype(int)
+    #             self._S_E_mem = np.tile(self._S_E, (self.steps_Delay.max() + 1, 1)).T
+    #             self._S_E_vect = self._S_E_mem[list(range(self._nc)), self.steps_Delay]
+
+
+    #     # Initialize BOLD variables if required
+    #     if include_BOLD:
+    #         if save_mem:
+    #             # Hemodynamic state record
+    #             hemo_state = np.zeros((self._nc, n_save_steps))
+    #             #hemo_state[:3, :, 0] = 1.  # ICs
+    #         else:
+    #             # Hemodynamic state record
+    #             hemo_state = np.zeros((5, self._nc, n_save_steps))
+    #             hemo_state[:3, :, 0] = 1.  # ICs
+    #         # Hemodynamic state record
+    #         #hemo_state = np.zeros((5, self._nc, n_save_steps))
+    #         #hemo_state[:3, :, 0] = 1.  # ICs
+
+    #     # Main for-loop
+    #     for i in range(1, n_sim_steps):
+    #         if self.delays:
+    #             self._S_E_mem[:, 0] = self._S_E
+    #             self._S_E_vect = self._S_E_mem[list(range(self._nc)), self.steps_Delay]
+
+    #         self._step(dt)
+
+    #         if self.delays:
+    #             self._S_E_mem[:, 1:] = self._S_E_mem[:, :-1]
+
+    #         # Update state variables
+    #         if not (i % n_save):
+    #             i_save = i // n_save # integer division 
+    #             if not save_mem:
+    #                 synaptic_state[:, :, i_save] = self.state
+
+    #             if include_BOLD:
+    #                 self.hemo.step(dt*10., self._S_E - self._S_E_ss)
+    #                 if save_mem:
+    #                     hemo_state[:, i_save] = self.hemo._y
+    #                 else:
+    #                     hemo_state[:, :, i_save] = self.hemo.state
+    #                 #hemo_state[:, :, i_save] = self.hemo.state
+
+    #             if self._verbose:
+    #                 if not (i_save % 1000):
+    #                     print(i_save)
+
+    #     if self._verbose:
+    #         print("Simulation complete.")
+
+    #     self.sim.t = t
+    #     self.sim.dt = dt_save
+    #     self.sim.n_save = n_save
+    #     self.sim.t_points = np.linspace(0, t, n_save_steps)
+    #     self.sim.seed = sim_seed
+
+    #     if not save_mem:
+    #         self.sim.I_I, self.sim.I_E, self.sim.r_I, self.sim.r_E, \
+    #         self.sim.S_I, self.sim.S_E = synaptic_state
+
+    #     if include_BOLD:
+    #         if save_mem:
+    #             self.sim.y = hemo_state
+    #         else:
+    #             self.sim.x, self.sim.f, self.sim.v, self.sim.q, self.sim.y = hemo_state
+
+    #     #self.sim.I_I, self.sim.I_E, self.sim.r_I, self.sim.r_E, \
+    #     #self.sim.S_I, self.sim.S_E = synaptic_state
+
+    #     #if include_BOLD:
+    #     #    self.sim.x, self.sim.f, self.sim.v, self.sim.q, self.sim.y = hemo_state
+
+    #     return
+
 
     def integrate(self, t,
-                  dt=1e-4, n_save=10, stimulation=0.0,
-                  delays=False, distance=None, velocity=None,
-                  include_BOLD=True, from_fixed=True,
-                  sim_seed=None, save_mem=False):
+                dt=1e-4, n_save=10, stimulation=0.0,
+                delays=False, distance=None, velocity=None,
+                include_BOLD=True, from_fixed=True,
+                sim_seed=None, save_mem=False):
         """Computes cross-spectral density of hemodynamic variables.
 
         Parameters
@@ -379,149 +681,159 @@ class Model(object):
         dt : float, optional
             Integration time step in seconds. By default dt is 0.1 msec.
         n_save : int, optional
-            Sampling rate (time points). By default n_save is 10, therefore in dt is 0.1 msec, all the 
-            variables will be sampled at 1 msec.
+            Sampling rate (time points). By default n_save is 10, therefore in dt is 0.1 msec,
+            all the variables will be sampled at 1 msec.
         stimulation : ndarray or float, optional
-            An array or matrix containing external currents if required. The size of array should match
-            to the number time points (i.e. int(t / dt + 1)) (0.0 by default)
+            An array or matrix containing external currents if required.
+            The size of the array should match the number of time points (i.e. int(t/dt)+1)
+            or be a scalar (0.0 by default).
         delays : bool, optional
-            If True, delays are included during the integration (False by default)
+            If True, include conduction delays (False by default).
         distance : ndarray, optional
-            The distance matrix, If delays will be taken into account. The distance matrix should contain
-            the euclidean or geodesic distance between regions in mm.
+            Distance matrix (mm) for delays.
         velocity : float, optional
-            The conduction velocity in m/sec, if conduction delays are not ignored.
-        include_BOLD : boolean, optional
-            If True, the simulation will also include hemodynamic model and BOLD signals (True by default)
-        from_fixed : boolean, optional
-            If True, the simulation will begin using steady state values of the parameters,
-            otherwise the last available values will be used (i.e. from previous simulations...etc.)
+            Conduction velocity (m/sec).
+        include_BOLD : bool, optional
+            If True, include hemodynamic model and BOLD signals (True by default).
+        from_fixed : bool, optional
+            If True, start from fixed‐point initial state.
         sim_seed : int, optional
-            The seed for random number generator.
-        
-        
+            RNG seed.
+        save_mem : bool, optional
+            If True, minimize memory usage when recording.
+
         Returns
         -------
         None
-            
-        Notes
-        -----
-            This method simulates the system for the given simulation time and the parameter values are stored.
-            After successfull simulation, The excitatory synaptic variables can be obtained by .sim.S_E or 
-            BOLD signals can be obtained by .sim.y
         """
-
-        sim_seed = np.random.randint(0, 4294967295) if sim_seed is None else sim_seed
+        # 1) Seed RNG
+        sim_seed = np.random.randint(0, 2**32 - 1) if sim_seed is None else sim_seed
         np.random.seed(sim_seed)
 
-        # Ensure Jacobian is computed before integration
-        if self._jacobian is None: 
+        # 2) Compute Jacobian & reset state if needed
+        if self._jacobian is None:
             self.set_jacobian()
-
-        # Initialize to fixed point
         if from_fixed:
             self._reset_state()
             self.hemo.reset_state()
 
-        # Simulation parameters
-        dt_save = dt * n_save
-        n_sim_steps = int(t / dt + 1)
-        n_save_steps = int(t / dt_save + 1)
+        # 3) Time discretization
+        dt_save     = dt * n_save
+        n_sim_steps  = int(t / dt) + 1
+        n_save_steps = int(t / dt_save) + 1
 
-        # Synaptic state record
+        # 4) Preprocess stimulation → array of shape (n_sim_steps, nc)
+        if np.isscalar(stimulation):
+            stim_array = np.full((n_sim_steps, self.nc), stimulation)
+        else:
+            stim_array = np.array(stimulation)
+            # 1D time only → broadcast across regions
+            if stim_array.ndim == 1:
+                if stim_array.size != n_sim_steps:
+                    raise ValueError(
+                        f"stimulation length {stim_array.size} != {n_sim_steps}")
+                stim_array = np.tile(stim_array[:, None], (1, self.nc))
+            # full (time × regions) must match exactly
+            elif stim_array.shape != (n_sim_steps, self.nc):
+                raise ValueError(
+                    f"stimulation shape {stim_array.shape} must be "
+                    f"(n_sim_steps, nc)=({n_sim_steps}, {self.nc})"
+                )
+
+        # 5) Allocate storage
         if not save_mem:
             synaptic_state = np.zeros((6, self.nc, n_save_steps))
             synaptic_state[:, :, 0] = self.state
-        # Synaptic state record
-        #synaptic_state = np.zeros((6, self.nc, n_save_steps))
-        #synaptic_state[:, :, 0] = self.state
+
+        if include_BOLD:
+            if save_mem:
+                hemo_state = np.zeros((self.nc, n_save_steps))
+            else:
+                hemo_state = np.zeros((5, self.nc, n_save_steps))
+                hemo_state[:3, :, 0] = 1.  # initial conditions
 
         if self._verbose:
             print("Beginning simulation.")
 
+        # 6) Set up delays if requested
         self.delays = delays
         if self.delays:
             if distance is None or velocity is None:
-                self.delays = False
-                msg = "Distance matrix and transmission velocity to implement delays"
+                msg = "Distance matrix and transmission velocity are required for delays"
                 raise NotImplementedError(msg)
-            else:
-                self.distance = distance
-                self.velocity = velocity
-                self.steps_Delay = np.round(self.distance / (self.velocity * 1e-4 * 1e3)).astype(int)
-                self._S_E_mem = np.tile(self._S_E, (self.steps_Delay.max() + 1, 1)).T
-                self._S_E_vect = self._S_E_mem[list(range(self._nc)), self.steps_Delay]
+            self.distance    = distance
+            self.velocity    = velocity
+            # steps of delay in index units
+            self.steps_Delay = np.round(
+                self.distance / (self.velocity * 1e-4 * 1e3)
+            ).astype(int)
+            # initialize circular buffer for S_E
+            self._S_E_mem  = np.tile(self._S_E, (self.steps_Delay.max() + 1, 1)).T
+            self._S_E_vect = self._S_E_mem[
+                list(range(self.nc)), self.steps_Delay
+            ]
 
-
-        # Initialize BOLD variables if required
-        if include_BOLD:
-            if save_mem:
-                # Hemodynamic state record
-                hemo_state = np.zeros((self._nc, n_save_steps))
-                #hemo_state[:3, :, 0] = 1.  # ICs
-            else:
-                # Hemodynamic state record
-                hemo_state = np.zeros((5, self._nc, n_save_steps))
-                hemo_state[:3, :, 0] = 1.  # ICs
-            # Hemodynamic state record
-            #hemo_state = np.zeros((5, self._nc, n_save_steps))
-            #hemo_state[:3, :, 0] = 1.  # ICs
-
-        # Main for-loop
+        # 7) Main integration loop
         for i in range(1, n_sim_steps):
+            # 7a) update delays buffer
             if self.delays:
+                # write newest S_E into buffer
                 self._S_E_mem[:, 0] = self._S_E
-                self._S_E_vect = self._S_E_mem[list(range(self._nc)), self.steps_Delay]
+                self._S_E_vect     = self._S_E_mem[
+                    list(range(self.nc)), self.steps_Delay
+                ]
 
+            # 7b) inject stimulation for this step
+            self._I_ext = stim_array[i]
+
+            # 7c) step synaptic dynamics
             self._step(dt)
 
+            # 7d) shift delay‐buffer
             if self.delays:
                 self._S_E_mem[:, 1:] = self._S_E_mem[:, :-1]
 
-            # Update state variables
-            if not (i % n_save):
-                i_save = i // n_save # integer division 
+            # 7e) record at save points
+            if (i % n_save) == 0:
+                i_save = i // n_save
                 if not save_mem:
                     synaptic_state[:, :, i_save] = self.state
 
                 if include_BOLD:
-                    self.hemo.step(dt*10., self._S_E - self._S_E_ss)
+                    self.hemo.step(dt * 10., self._S_E - self._S_E_ss)
                     if save_mem:
                         hemo_state[:, i_save] = self.hemo._y
                     else:
                         hemo_state[:, :, i_save] = self.hemo.state
-                    #hemo_state[:, :, i_save] = self.hemo.state
 
-                if self._verbose:
-                    if not (i_save % 1000):
-                        print(i_save)
+                if self._verbose and (i_save % 1000) == 0:
+                    print(f"Saved step {i_save}/{n_save_steps}")
 
         if self._verbose:
             print("Simulation complete.")
 
-        self.sim.t = t
-        self.sim.dt = dt_save
-        self.sim.n_save = n_save
+        # 8) Pack results into self.sim
+        self.sim.t        = t
+        self.sim.dt       = dt_save
+        self.sim.n_save   = n_save
         self.sim.t_points = np.linspace(0, t, n_save_steps)
-        self.sim.seed = sim_seed
+        self.sim.seed     = sim_seed
 
         if not save_mem:
-            self.sim.I_I, self.sim.I_E, self.sim.r_I, self.sim.r_E, \
-            self.sim.S_I, self.sim.S_E = synaptic_state
+            (self.sim.I_I, self.sim.I_E,
+            self.sim.r_I, self.sim.r_E,
+            self.sim.S_I, self.sim.S_E) = synaptic_state
 
         if include_BOLD:
             if save_mem:
                 self.sim.y = hemo_state
             else:
-                self.sim.x, self.sim.f, self.sim.v, self.sim.q, self.sim.y = hemo_state
-
-        #self.sim.I_I, self.sim.I_E, self.sim.r_I, self.sim.r_E, \
-        #self.sim.S_I, self.sim.S_E = synaptic_state
-
-        #if include_BOLD:
-        #    self.sim.x, self.sim.f, self.sim.v, self.sim.q, self.sim.y = hemo_state
+                (self.sim.x, self.sim.f,
+                self.sim.v, self.sim.q,
+                self.sim.y) = hemo_state
 
         return
+
 
     # Auxiliary Methods
     def _reset_state(self):
