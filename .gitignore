@@ -5,3 +5,9 @@ docs/.buildinfo/
 outputs/
 *.pyc
 __pycache__/
+*.sh
+*.log
+*.nii
+*.png
+experiments/INTs/INT_Outputs/*
+experiments/INTs/INT_Results/*

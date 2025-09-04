@@ -17,6 +17,7 @@ class Bnm():
             If None, the model parameters are homogeneous (None by default)
         maps : ndarray, optional
             Biological maps matrix of shape (n_maps, n_regions) to modulate local model parameters.
+            Can also be a 1D array of shape (n_regions,) which will be automatically reshaped to (1, n_regions).
             If None, the model parameters are homogeneous (None by default)
         map_invert_flags : list of bool, optional
             For each biological map, whether to invert it (True) or use direct (False).
@@ -44,11 +45,27 @@ class Bnm():
         else:
             self.maps = maps
 
+        # Handle 1D maps arrays by reshaping to (1, n_regions)
+        if self.maps is not None:
+            if isinstance(self.sc, list):
+                # Hemispheric case: validate against first hemisphere
+                n_regions = self.sc[0].shape[0]
+            else:
+                # Single model case 
+                n_regions = self.sc.shape[0]
+            
+            if isinstance(self.maps, np.ndarray):
+                if self.maps.ndim == 1:
+                    if self.maps.shape[0] != n_regions:
+                        raise ValueError(f"1D maps array has {self.maps.shape[0]} elements but expected {n_regions} regions")
+                    self.maps = self.maps[None, :]  # Reshape to (1, n_regions)
+
         if isinstance(self.sc, list):
             # Handle hemisphere splitting
             if not isinstance(self.maps, list):
                 self.maps = [self.maps, self.maps]
-            # Handle map_invert_flags for hemispheric models
+            # Handle map_invert_flags for hemispheric models (NOT TESTED)
+            print("THIS SET OF FEATURES HAS NEVER BEEN TESTED BY ME (FRANK)")
             if map_invert_flags is not None and not isinstance(map_invert_flags[0], list):
                 # Same flags for both hemispheres
                 hemi_invert_flags = [map_invert_flags, map_invert_flags]
@@ -58,6 +75,7 @@ class Bnm():
                                         map_invert_flags=hemi_invert_flags[ii] if hemi_invert_flags is not None else None,
                                         verbose=False, *args, **kwargs) for ii in range(2)]
         else:
+            # if you are not doing hemisphere splitting
             self.dmf = dmf_model.Model(self.sc, g=1.0, maps=self.maps,
                                        map_invert_flags=map_invert_flags,
                                        verbose=False, *args, **kwargs)

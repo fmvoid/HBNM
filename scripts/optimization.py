@@ -97,14 +97,14 @@ class MultiMapHeterogeneous(Pmc):
         else:
             # Multi-map case logic
             # w_EI parameters: bias + coefficients
-            priors.append(stats.uniform(0.001, 3.0))   # w_EI bias
+            priors.append(stats.uniform(0.001, 2.0))   # w_EI bias
             for _ in range(self.n_maps):
-                priors.append(stats.uniform(0.001, 3.0))  # w_EI coefficients
+                priors.append(stats.uniform(0.0, 2.5))  # w_EI coefficients
             
             # w_EE parameters: bias + coefficients  
-            priors.append(stats.uniform(0.001, 3.0))   # w_EE bias
+            priors.append(stats.uniform(0.001, 5.0))   # w_EE bias
             for _ in range(self.n_maps):
-                priors.append(stats.uniform(0.001, 3.0))  # w_EE coefficients
+                priors.append(stats.uniform(0.0, 15.0))  # w_EE coefficients
             
             # Global coupling - reasonable range
             priors.append(stats.uniform(0.001, 5.0))     # G

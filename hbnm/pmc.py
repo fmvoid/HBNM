@@ -383,7 +383,7 @@ class Pmc(object, metaclass=ABCMeta):
                 p = prior_prob.prod()
 
                 for j in range(t_prev.shape[1]):
-                    norm[j] = stats.multivariate_normal.pdf(t_curr[:, i], mean=t_prev[:, j], cov=tau_2)
+                    norm[j] = stats.multivariate_normal.pdf(t_curr[:, i], mean=t_prev[:, j], cov=tau_2, allow_singular=True) # Changed allow_singular to be True to fix error with surrogate maps model fitting
                 weights_new[i] = p/sum(w_old * norm)
 
             return weights_new/weights_new.sum()

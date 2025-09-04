@@ -686,7 +686,9 @@ class Model(object):
         stimulation : ndarray or float, optional
             An array or matrix containing external currents if required.
             The size of the array should match the number of time points (i.e. int(t/dt)+1)
-            or be a scalar (0.0 by default).
+            or be a scalar (0.0 by default). If providing an array, it must have shape
+            (n_sim_steps,) for time-only stimulation or (n_sim_steps, nc) for region-specific
+            stimulation, where n_sim_steps = int(t/dt)+1 and nc is number of regions.
         delays : bool, optional
             If True, include conduction delays (False by default).
         distance : ndarray, optional

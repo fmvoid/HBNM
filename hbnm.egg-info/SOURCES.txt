@@ -1,7 +1,9 @@
 README.md
 __init__.py
 setup.py
+test_hmap.py
 hbnm/__init__.py
+hbnm/analysis.py
 hbnm/bnm.py
 hbnm/io.py
 hbnm/pmc.py
@@ -18,8 +20,10 @@ hbnm/model/params/__init__.py
 hbnm/model/params/friston03.py
 hbnm/model/params/obata04.py
 hbnm/model/params/synaptic.py
+tests/test_analysis.py
 tests/test_functionality.py
 tests/test_import.py
 tests/test_io.py
 tests/test_multi_map_functionality.py
 tests/test_real_example.py
+tests/test_threading.py
