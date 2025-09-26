@@ -198,9 +198,62 @@ def load_biological_maps(data, map_names=None, linearize=False):
     
     return maps, invert_flags
 
+def parse_custom_priors(priors_string, model_type, maps_path):
+    """
+    Parse custom priors string into dictionary format.
+    
+    Parameters
+    ----------
+    priors_string : str
+        Semicolon-separated parameter ranges
+    model_type : str
+        Type of model being used
+    maps_path : str  
+        Path to maps (used to determine if homogeneous)
+    
+    Returns
+    -------
+    dict
+        Custom priors dictionary
+    """
+    # Determine if this is homogeneous or heterogeneous
+    is_homogeneous = (model_type.lower() == 'homogeneous' or maps_path == "None")
+    
+    # Split by semicolons to get parameter ranges
+    param_ranges = priors_string.split(';')
+    
+    if is_homogeneous:
+        # Homogeneous: w_EI_bias, w_EE_bias, G
+        if len(param_ranges) != 3:
+            raise ValueError(f"Homogeneous model requires 3 parameter ranges, got {len(param_ranges)}")
+        
+        keys = ['w_EI_bias', 'w_EE_bias', 'G']
+    else:
+        # Heterogeneous: w_EI_bias, w_EI_coeff, w_EE_bias, w_EE_coeff, G  
+        if len(param_ranges) != 5:
+            raise ValueError(f"Heterogeneous model requires 5 parameter ranges, got {len(param_ranges)}")
+        
+        keys = ['w_EI_bias', 'w_EI_coeff', 'w_EE_bias', 'w_EE_coeff', 'G']
+    
+    # Parse each range
+    custom_priors = {}
+    for i, (key, range_str) in enumerate(zip(keys, param_ranges)):
+        try:
+            min_val, max_val = range_str.split(',')
+            min_val, max_val = float(min_val), float(max_val)
+            
+            if min_val >= max_val:
+                raise ValueError(f"Invalid range for {key}: min ({min_val}) >= max ({max_val})")
+                
+            custom_priors[key] = (min_val, max_val)
+        except ValueError as e:
+            raise ValueError(f"Error parsing range for parameter {key}: {e}")
+    
+    return custom_priors
+
 if __name__ == '__main__':
     """
-    Enhanced multi-map optimization script.
+    Enhanced multi-map optimization script with custom prior support.
     
     Arguments:
     1- model type: 'homogeneous', 'heterogeneous', 'multimap', or number of maps (e.g., '6')
@@ -213,13 +266,14 @@ if __name__ == '__main__':
     8- maps object, must be a numpy array (.npy), set to "None" for homogeneous model
     9- (optional) linearize flag: 'linearize' or 'no_linearize' (default: 'no_linearize')
     10- (optional) invert flags: bool value, comma separated
+    11- (optional) custom priors: ranges for parameters in format:
+        For homogeneous: "w_EI_bias_min,w_EI_bias_max;w_EE_bias_min,w_EE_bias_max;G_min,G_max"
+        For heterogeneous: "w_EI_bias_min,w_EI_bias_max;w_EI_coeff_min,w_EI_coeff_max;w_EE_bias_min,w_EE_bias_max;w_EE_coeff_min,w_EE_coeff_max;G_min,G_max"
     
     Examples:
-    python multi_map_optim.py homogeneous 1000 10 0 sampler test_homo
-    python multi_map_optim.py heterogeneous 1000 10 0 sampler test_hetero
-    python multi_map_optim.py multimap 1000 10 0 sampler test_multi NMDA_avg,GRIN1,GRIN2A
-    python multi_map_optim.py multimap 1000 10 0 sampler test_multi NMDA_avg,GRIN1,GRIN2A linearize
-    python multi_map_optim.py 6 1000 10 0 sampler test_6maps NMDA_avg,GRIN1,GRIN2A,GRIN2B,GRIN2C,GRIN2D
+    python optimization_tms_fmri_data.py homogeneous 1000 10 0 sampler test_homo fc.npy None no_linearize invert "0.001,5.0;0.001,15.0;0.001,5.0"
+    python optimization_tms_fmri_data.py heterogeneous 1000 10 0 sampler test_hetero fc.npy maps.npy no_linearize invert "0.001,2.0;0.0,2.5;0.001,5.0;0.0,15.0;0.001,5.0"
+    python optimization_tms_fmri_data.py multimap 1000 10 0 sampler test_multi fc.npy maps.npy no_linearize invert "0.001,2.0;0.0,2.5;0.001,5.0;0.0,15.0;0.001,5.0"
     """
 
     # Parse arguments
@@ -245,7 +299,7 @@ if __name__ == '__main__':
         else:
             print(f"Warning: Unknown linearize flag '{sys.argv[9]}'. Using default (no_linearize).")
     
-    # Optional: custom invert flags (9th argument)
+    # Optional: custom invert flags (10th argument)
     if len(sys.argv) > 10:
         try:
             custom_flags = sys.argv[10].split(',')
@@ -263,6 +317,21 @@ if __name__ == '__main__':
             print(f"Error parsing custom invert flags: {e}")
             print("Using smart defaults instead.")
             invert_flags = None
+    
+    # Optional: custom priors (11th argument) - MANDATORY if provided
+    custom_priors = None
+    if len(sys.argv) > 11:
+        try:
+            priors_string = sys.argv[11]
+            custom_priors = parse_custom_priors(priors_string, model_type, maps_path)
+            print(f"Using custom priors: {custom_priors}")
+        except Exception as e:
+            print(f"Error parsing custom priors: {e}")
+            raise ValueError(f"Invalid custom priors specification. Please check format.")
+    
+    # Validate that custom priors are provided (mandatory requirement)
+    if custom_priors is None:
+        raise ValueError("Custom priors are mandatory. Please specify prior ranges as the 11th argument.")
 
     # Set directories
     current_path = os.getcwd()
@@ -291,7 +360,8 @@ if __name__ == '__main__':
         
         pmc_opt = Homogeneous(input_dir, output_dir + append_directory + '/')
         pmc_opt.initialize(sc, fc=fc_obj, n_particles=n_samples,
-                          rejection_threshold=rejection_threshold, norm_sc=True)
+                          rejection_threshold=rejection_threshold, 
+                          custom_priors=custom_priors, norm_sc=True)
         
         print(f"Initialized homogeneous model with {len(pmc_opt.prior)} parameters")
         
@@ -301,7 +371,8 @@ if __name__ == '__main__':
         
         pmc_opt = Heterogeneous(input_dir, output_dir + append_directory + '/')
         pmc_opt.initialize(sc, fc=fc_obj, gradient=hmap, n_particles=n_samples,
-                          rejection_threshold=rejection_threshold, norm_sc=True)
+                          rejection_threshold=rejection_threshold, 
+                          custom_priors=custom_priors, norm_sc=True)
         
         print(f"Initialized single-map heterogeneous model with {len(pmc_opt.prior)} parameters")
         
@@ -322,7 +393,8 @@ if __name__ == '__main__':
 
         pmc_opt = MultiMapHeterogeneous(input_dir, output_dir + append_directory + '/')
         pmc_opt.initialize(sc, fc=fc_obj, maps=maps, map_invert_flags=invert_flags, n_particles=n_samples,
-                          rejection_threshold=rejection_threshold, norm_sc=True)
+                          rejection_threshold=rejection_threshold, 
+                          custom_priors=custom_priors, norm_sc=True)
         
         print(f"Initialized multi-map model with:")
         print(f"  - {pmc_opt.n_maps} biological maps")

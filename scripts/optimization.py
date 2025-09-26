@@ -27,7 +27,7 @@ class MultiMapHeterogeneous(Pmc):
         super().__init__(input_directory, output_directory, verbose)
         
     def initialize(self, sc, fc=None, maps=None, map_invert_flags=None, n_particles=10, 
-                   rejection_threshold=None, *args, **kwargs):
+                   rejection_threshold=None, custom_priors=None, *args, **kwargs):
         """
         Initialize the optimization with data and model.
         
@@ -45,6 +45,15 @@ class MultiMapHeterogeneous(Pmc):
             Number of particles for PMC
         rejection_threshold : float
             Initial rejection threshold
+        custom_priors : dict, optional
+            Custom prior specifications. If None, uses default priors.
+            Expected format: {
+                'w_EI_bias': (min, max),
+                'w_EI_coeff': (min, max),  # For heterogeneous models
+                'w_EE_bias': (min, max), 
+                'w_EE_coeff': (min, max),  # For heterogeneous models
+                'G': (min, max)
+            }
         """
         # Determine number of maps
         if maps is not None:
@@ -57,6 +66,7 @@ class MultiMapHeterogeneous(Pmc):
             
         # Store for use in other methods
         self.maps = maps
+        self.custom_priors = custom_priors
         
         # Update priors now that we know the correct number of maps
         self.set_prior()
@@ -87,12 +97,31 @@ class MultiMapHeterogeneous(Pmc):
                 print("Setting placeholder priors (will be updated during initialize)")
             return
         
-        # Normal prior setting logic here...
+        # Check if custom priors were provided
+        if hasattr(self, 'custom_priors') and self.custom_priors is not None:
+            priors = self._build_custom_priors(self.custom_priors)
+            if self.verbose:
+                print("Using custom priors specified by user")
+        else:
+            priors = self._build_default_priors()
+            if self.verbose:
+                print("Using default priors")
+        
+        self.prior = priors
+        
+        if self.verbose:
+            print(f"Set up priors for {len(self.prior)} parameters:")
+            print(f"  - w_EI: 1 bias + {self.n_maps} coefficients")
+            print(f"  - w_EE: 1 bias + {self.n_maps} coefficients") 
+            print(f"  - G: 1 parameter")
+    
+    def _build_default_priors(self):
+        """Build default prior distributions"""
         priors = []
         if self.n_maps == 0:
             # Homogeneous case logic
             priors.append(stats.uniform(0.001, 5.0))   # w_EI bias
-            priors.append(stats.uniform(0.001, 5.0))   # w_EE bias  
+            priors.append(stats.uniform(0.001, 5.0))   # w_EE bias - This should be changed to 0.001, 15.0
             priors.append(stats.uniform(0.001, 5.0))   # G
         else:
             # Multi-map case logic
@@ -109,13 +138,71 @@ class MultiMapHeterogeneous(Pmc):
             # Global coupling - reasonable range
             priors.append(stats.uniform(0.001, 5.0))     # G
         
-        self.prior = priors
+        return priors
+    
+    def _build_custom_priors(self, custom_priors):
+        """
+        Build prior distributions from custom specifications.
         
-        if self.verbose:
-            print(f"Set up priors for {len(self.prior)} parameters:")
-            print(f"  - w_EI: 1 bias + {self.n_maps} coefficients")
-            print(f"  - w_EE: 1 bias + {self.n_maps} coefficients") 
-            print(f"  - G: 1 parameter")
+        Parameters
+        ----------
+        custom_priors : dict
+            Custom prior specifications with keys:
+            - 'w_EI_bias': (min, max)
+            - 'w_EI_coeff': (min, max) for heterogeneous models
+            - 'w_EE_bias': (min, max)
+            - 'w_EE_coeff': (min, max) for heterogeneous models  
+            - 'G': (min, max)
+        
+        Returns
+        -------
+        list
+            List of scipy.stats prior distributions
+        """
+        priors = []
+        
+        if self.n_maps == 0:
+            # Homogeneous case - need w_EI_bias, w_EE_bias, G
+            required_keys = ['w_EI_bias', 'w_EE_bias', 'G']
+            for key in required_keys:
+                if key not in custom_priors:
+                    raise ValueError(f"Missing required prior specification for homogeneous model: '{key}'")
+                
+                min_val, max_val = custom_priors[key]
+                if min_val >= max_val:
+                    raise ValueError(f"Invalid prior range for {key}: min ({min_val}) >= max ({max_val})")
+                
+                priors.append(stats.uniform(min_val, max_val - min_val))
+        else:
+            # Heterogeneous case - need all coefficient types
+            required_keys = ['w_EI_bias', 'w_EI_coeff', 'w_EE_bias', 'w_EE_coeff', 'G']
+            for key in required_keys:
+                if key not in custom_priors:
+                    raise ValueError(f"Missing required prior specification for heterogeneous model: '{key}'")
+            
+            # w_EI bias
+            min_val, max_val = custom_priors['w_EI_bias']
+            priors.append(stats.uniform(min_val, max_val - min_val))
+            
+            # w_EI coefficients  
+            min_val, max_val = custom_priors['w_EI_coeff']
+            for _ in range(self.n_maps):
+                priors.append(stats.uniform(min_val, max_val - min_val))
+            
+            # w_EE bias
+            min_val, max_val = custom_priors['w_EE_bias']  
+            priors.append(stats.uniform(min_val, max_val - min_val))
+            
+            # w_EE coefficients
+            min_val, max_val = custom_priors['w_EE_coeff']
+            for _ in range(self.n_maps):
+                priors.append(stats.uniform(min_val, max_val - min_val))
+            
+            # Global coupling
+            min_val, max_val = custom_priors['G']
+            priors.append(stats.uniform(min_val, max_val - min_val))
+        
+        return priors
 
     def run_particle(self, theta):
         """
@@ -168,20 +255,22 @@ class Homogeneous(MultiMapHeterogeneous):
     """Backwards compatible homogeneous optimization (0 maps)"""
     
     def initialize(self, sc, fc=None, n_particles=10, rejection_threshold=None, 
-                   *args, **kwargs):
+                   custom_priors=None, *args, **kwargs):
         super().initialize(sc, fc=fc, maps=None, n_particles=n_particles,
-                          rejection_threshold=rejection_threshold, *args, **kwargs)
+                          rejection_threshold=rejection_threshold, 
+                          custom_priors=custom_priors, *args, **kwargs)
 
 
 class Heterogeneous(MultiMapHeterogeneous):
     """Backwards compatible single-map optimization"""
     
     def initialize(self, sc, fc=None, gradient=None, n_particles=10, 
-                   rejection_threshold=None, *args, **kwargs):
+                   rejection_threshold=None, custom_priors=None, *args, **kwargs):
         # Convert gradient to maps format for compatibility
         maps = gradient[None, :] if gradient is not None else None
         super().initialize(sc, fc=fc, maps=maps, n_particles=n_particles,
-                          rejection_threshold=rejection_threshold, *args, **kwargs)
+                          rejection_threshold=rejection_threshold, 
+                          custom_priors=custom_priors, *args, **kwargs)
 
 
 def load_data(data):
