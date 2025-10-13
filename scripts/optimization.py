@@ -243,9 +243,43 @@ class MultiMapHeterogeneous(Pmc):
         return subdiag(self.model.get('corr_bold'))
 
     def distance_function(self, synthetic_data):
-        """Calculate distance between model and empirical FC"""
-        fit = pearsonr(self.fc_objective, fisher_z(synthetic_data))[0]
-        penalty = (self.fc_objective.mean() - synthetic_data.mean()) ** 2
+        """
+        Calculate distance between model and empirical FC.
+        
+        Automatically detects Simple vs Hierarchical PMC based on fc_objective shape:
+        - 1D (n_connections,): Simple PMC using pearsonr
+        - 2D (n_connections, n_subjects): Hierarchical PMC using vcorrcoef
+        
+        Parameters
+        ----------
+        synthetic_data : ndarray
+            Model FC upper diagonal (n_connections,)
+            
+        Returns
+        -------
+        float
+            Distance metric (lower is better)
+        """
+        # Apply Fisher-z transform to model FC
+        synthetic_data_z = fisher_z(synthetic_data)
+        
+        # Detect PMC mode based on fc_objective dimensionality
+        if self.fc_objective.ndim == 2:
+            # HIERARCHICAL PMC: Use vcorrcoef for subject-level correlations
+            from hbnm.model.utils import vcorrcoef
+            
+            # vcorrcoef correlates each ROW of X with y (despite misleading docstring)
+            # fc_objective has shape (n_connections, n_subjects)
+            # Transpose to (n_subjects, n_connections) so each row = one subject
+            # synthetic_data_z is Fisher-z transformed; fc_objective was transformed during loading
+            fit = vcorrcoef(self.fc_objective.T, synthetic_data_z).mean()
+            penalty = (self.fc_objective.mean() - synthetic_data_z.mean()) ** 2
+            
+        else:
+            # SIMPLE PMC: Use pearsonr for group-average correlation
+            fit = pearsonr(self.fc_objective, synthetic_data_z)[0]
+            penalty = (self.fc_objective.mean() - synthetic_data_z.mean()) ** 2
+        
         distance = 1.0 - (fit - penalty)
         return distance
 

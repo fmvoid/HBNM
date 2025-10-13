@@ -2,7 +2,7 @@ import os
 import sys
 import numpy as np
 from hbnm.io import Data
-from hbnm.model.utils import subdiag, fisher_z
+from hbnm.model.utils import subdiag, fisher_z, normalize_sc
 from scipy.stats import pearsonr
 from optimization import load_data
 
@@ -198,6 +198,154 @@ def load_biological_maps(data, map_names=None, linearize=False):
     
     return maps, invert_flags
 
+def load_multiple_fc_files(fc_path_spec):
+    """
+    Load multiple FC matrices for hierarchical PMC.
+    
+    Parameters
+    ----------
+    fc_path_spec : str
+        Can be:
+        - Comma-separated file paths: "sub1.npy,sub2.npy,sub3.npy"
+        - Glob pattern: "subjects_*.npy" or "data/fc_*.npy"
+        - Directory path: "fc_subjects/" (loads all .npy files)
+        
+    Returns
+    -------
+    list of ndarray
+        List of FC matrices, each with shape (n_regions, n_regions)
+        
+    Raises
+    ------
+    ValueError
+        If no valid files found or files have incompatible shapes
+    """
+    import glob
+    
+    fc_files = []
+    
+    # Determine input type and collect file paths
+    if ',' in fc_path_spec:
+        # Comma-separated list
+        fc_files = [f.strip() for f in fc_path_spec.split(',')]
+        print(f"Loading {len(fc_files)} FC files from comma-separated list")
+        
+    elif os.path.isdir(fc_path_spec):
+        # Directory - load all .npy files
+        fc_files = sorted(glob.glob(os.path.join(fc_path_spec, '*.npy')))
+        print(f"Loading {len(fc_files)} FC files from directory: {fc_path_spec}")
+        
+    elif '*' in fc_path_spec:
+        # Glob pattern
+        fc_files = sorted(glob.glob(fc_path_spec))
+        print(f"Loading {len(fc_files)} FC files matching pattern: {fc_path_spec}")
+        
+    else:
+        raise ValueError(f"Invalid FC path specification: {fc_path_spec}. "
+                        f"Use comma-separated list, glob pattern, or directory.")
+    
+    # Validate we found files
+    if not fc_files:
+        raise ValueError(f"No FC files found for specification: {fc_path_spec}")
+    
+    # Load all files and validate shapes
+    fc_matrices = []
+    expected_shape = None
+    
+    for i, fc_file in enumerate(fc_files):
+        if not os.path.exists(fc_file):
+            raise ValueError(f"FC file not found: {fc_file}")
+        
+        try:
+            fc_matrix = np.load(fc_file)
+            
+            # Validate shape
+            if fc_matrix.ndim != 2:
+                raise ValueError(f"FC file {fc_file} has {fc_matrix.ndim} dimensions, expected 2")
+            
+            if fc_matrix.shape[0] != fc_matrix.shape[1]:
+                raise ValueError(f"FC file {fc_file} is not square: {fc_matrix.shape}")
+            
+            # Check consistency across subjects
+            if expected_shape is None:
+                expected_shape = fc_matrix.shape
+            elif fc_matrix.shape != expected_shape:
+                raise ValueError(f"FC file {fc_file} has shape {fc_matrix.shape}, "
+                               f"expected {expected_shape} (from first file)")
+            
+            fc_matrices.append(fc_matrix)
+            
+            if (i + 1) % 10 == 0:
+                print(f"  Loaded {i + 1}/{len(fc_files)} subjects...")
+                
+        except Exception as e:
+            raise ValueError(f"Error loading FC file {fc_file}: {e}")
+    
+    print(f"✓ Successfully loaded {len(fc_matrices)} FC matrices with shape {expected_shape}")
+    return fc_matrices
+
+
+def stack_fc_for_hierarchical(fc_matrices, n_regions=180):
+    """
+    Convert list of FC matrices to hierarchical PMC format.
+    
+    Parameters
+    ----------
+    fc_matrices : list of ndarray
+        List of FC matrices (n_regions_full, n_regions_full)
+    n_regions : int, optional
+        Number of regions to extract (default: 180 for left hemisphere)
+    
+    Returns
+    -------
+    ndarray
+        Shape (n_connections, n_subjects) with Fisher-z transformed upper diagonal values
+        where n_connections = n_regions * (n_regions - 1) / 2
+        
+    Notes
+    -----
+    This function:
+    1. Extracts left hemisphere (first n_regions) from each matrix
+    2. Computes upper diagonal (subdiag) for each
+    3. Applies Fisher-z transform
+    4. Stacks horizontally into (n_connections, n_subjects) format
+    
+    Important: The distance function will transpose this to (n_subjects, n_connections)
+    before passing to vcorrcoef, which correlates each row with the model FC.
+    """
+    n_subjects = len(fc_matrices)
+    n_connections = n_regions * (n_regions - 1) // 2
+    
+    # Preallocate output matrix
+    fc_stacked = np.empty((n_connections, n_subjects))
+    
+    print(f"Stacking {n_subjects} FC matrices into hierarchical format...")
+    print(f"  Extracting first {n_regions} regions (left hemisphere)")
+    print(f"  Output shape: ({n_connections} connections, {n_subjects} subjects)")
+    
+    for s, fc_matrix in enumerate(fc_matrices):
+        # Extract left hemisphere
+        fc_left = fc_matrix[:n_regions, :n_regions]
+        
+        # Extract upper diagonal and apply Fisher-z transform
+        fc_upper = subdiag(fc_left)
+        fc_z = fisher_z(fc_upper)
+        
+        # Store in output matrix
+        fc_stacked[:, s] = fc_z
+        
+        if (s + 1) % 20 == 0:
+            print(f"  Processed {s + 1}/{n_subjects} subjects...")
+    
+    # Compute statistics
+    mean_fc = fc_stacked.mean()
+    std_fc = fc_stacked.std()
+    print(f"✓ Stacking complete")
+    print(f"  FC statistics: mean={mean_fc:.4f}, std={std_fc:.4f}")
+    
+    return fc_stacked
+
+
 def parse_custom_priors(priors_string, model_type, maps_path):
     """
     Parse custom priors string into dictionary format.
@@ -253,7 +401,7 @@ def parse_custom_priors(priors_string, model_type, maps_path):
 
 if __name__ == '__main__':
     """
-    Enhanced multi-map optimization script with custom prior support.
+    Enhanced multi-map optimization script with Simple and Hierarchical PMC support.
     
     Arguments:
     1- model type: 'homogeneous', 'heterogeneous', 'multimap', or number of maps (e.g., '6')
@@ -262,7 +410,13 @@ if __name__ == '__main__':
     4- sampler id
     5- optimization task: 'sampler' or 'wrapper'
     6- append to output directory
-    7- functional connectivity object, must be a numpy array (.npy) # eventually an array of arrays for hPMC
+    7- functional connectivity object:
+        SIMPLE PMC: Single .npy file with group-average FC (n_regions, n_regions)
+            Example: "group_fc.npy"
+        HIERARCHICAL PMC: Multiple .npy files (one per subject), specified as:
+            - Comma-separated: "sub01.npy,sub02.npy,sub03.npy"
+            - Glob pattern: "subjects/sub*.npy" or "fc_data/sub*_fc.npy"
+            - Directory: "fc_subjects/" (loads all .npy files in directory)
     8- maps object, must be a numpy array (.npy), set to "None" for homogeneous model
     9- (optional) linearize flag: 'linearize' or 'no_linearize' (default: 'no_linearize')
     10- (optional) invert flags: bool value, comma separated
@@ -271,9 +425,20 @@ if __name__ == '__main__':
         For heterogeneous: "w_EI_bias_min,w_EI_bias_max;w_EI_coeff_min,w_EI_coeff_max;w_EE_bias_min,w_EE_bias_max;w_EE_coeff_min,w_EE_coeff_max;G_min,G_max"
     
     Examples:
-    python optimization_tms_fmri_data.py homogeneous 1000 10 0 sampler test_homo fc.npy None no_linearize invert "0.001,5.0;0.001,15.0;0.001,5.0"
-    python optimization_tms_fmri_data.py heterogeneous 1000 10 0 sampler test_hetero fc.npy maps.npy no_linearize invert "0.001,2.0;0.0,2.5;0.001,5.0;0.0,15.0;0.001,5.0"
-    python optimization_tms_fmri_data.py multimap 1000 10 0 sampler test_multi fc.npy maps.npy no_linearize invert "0.001,2.0;0.0,2.5;0.001,5.0;0.0,15.0;0.001,5.0"
+    
+    # Simple PMC (group-average FC):
+    python optimization_tms_fmri_data.py homogeneous 1000 10 0 sampler test_homo group_fc.npy None no_linearize invert "0.001,5.0;0.001,15.0;0.001,5.0"
+    python optimization_tms_fmri_data.py heterogeneous 1000 10 0 sampler test_hetero group_fc.npy maps.npy no_linearize invert "0.001,2.0;0.0,2.5;0.001,5.0;0.0,15.0;0.001,5.0"
+    
+    # Hierarchical PMC (subject-level FC):
+    python optimization_tms_fmri_data.py multimap 1000 10 0 sampler test_hpmc "subjects/*.npy" maps.npy no_linearize invert "0.001,2.0;0.0,2.5;0.001,5.0;0.0,15.0;0.001,5.0"
+    python optimization_tms_fmri_data.py homogeneous 1000 10 0 sampler test_hpmc_homo "fc_dir/" None no_linearize invert "0.001,5.0;0.001,15.0;0.001,5.0"
+    
+    Notes:
+    - Simple PMC: Fits model to group-average FC using pearsonr
+    - Hierarchical PMC: Fits model to multiple subjects using vcorrcoef (mean correlation across subjects)
+    - The script automatically detects mode based on FC path format
+    - All subject FC files must have the same shape (n_regions, n_regions)
     """
 
     # Parse arguments
@@ -342,16 +507,69 @@ if __name__ == '__main__':
     # Load structural connectivity and functional connectivity
     data = Data(input_dir, output_dir)
     sc, hmap, fc_obj = load_data(data)
-    # fc_obj = fisher_z(subdiag(fc_obj))
-
-    # NOTE Temporary fix - This is technical debt
-    # Override fc_obj with the FC from
-    # Load FC from group means file
-    fc = np.load(fc_vector_path)
-    fc_obj = fc[:180,:180]
-    fc_obj = fisher_z(subdiag(fc_obj))
     
-    rejection_threshold = 1.0 - pearsonr(fc_obj, subdiag(sc))[0]
+    # TEMPORARY FIX - OVERRIDING THIS SC WITH KAAN's SC
+    kann_sc_w1 = np.load('/home/frank/HBNM/data/simulated_wc_data/W_1.npy')
+    kaan_sc_normalized = normalize_sc(kann_sc_w1[:180,:180])
+    sc = kaan_sc_normalized
+    print('YOU ARE USING KAAN SC MATRIX, YOU ARE NOT USING HCP')
+
+    # Detect PMC mode based on fc_vector_path format
+    is_hierarchical = (',' in fc_vector_path or '*' in fc_vector_path or 
+                      os.path.isdir(fc_vector_path))
+    
+    print("\n" + "="*60)
+    if is_hierarchical:
+        print("HIERARCHICAL PMC MODE DETECTED")
+        print("="*60)
+        print("Loading multiple FC matrices for hierarchical optimization...")
+        
+        # Load multiple FC files
+        fc_matrices = load_multiple_fc_files(fc_vector_path)
+        
+        # Stack into hierarchical format: (n_connections, n_subjects)
+        fc_obj = stack_fc_for_hierarchical(fc_matrices, n_regions=180)
+        
+        print(f"\nHierarchical FC loaded:")
+        print(f"  Shape: {fc_obj.shape} (connections × subjects)")
+        print(f"  Number of subjects: {fc_obj.shape[1]}")
+        print(f"  Distance function will use vcorrcoef (mean correlation across subjects)")
+        
+    else:
+        print("SIMPLE PMC MODE DETECTED")
+        print("="*60)
+        print("Loading single group-average FC matrix...")
+        
+        # Load single FC file (simple PMC)
+        fc = np.load(fc_vector_path)
+        fc_obj = fc[:180, :180]
+        fc_obj = fisher_z(subdiag(fc_obj))
+        
+        print(f"\nSimple FC loaded:")
+        print(f"  Shape: {fc_obj.shape} (connections,)")
+        print(f"  Distance function will use pearsonr (correlation with group average)")
+    
+    print("="*60 + "\n")
+    
+    # Calculate rejection threshold based on PMC mode
+    if is_hierarchical:
+        # Hierarchical: average SC-FC correlation across subjects
+        print("Calculating rejection threshold (hierarchical mode)...")
+        sc_fc_correlations = []
+        for s in range(fc_obj.shape[1]):
+            corr = pearsonr(fc_obj[:, s], subdiag(sc))[0]
+            sc_fc_correlations.append(corr)
+        mean_sc_fc_corr = np.mean(sc_fc_correlations)
+        rejection_threshold = 1.0 - mean_sc_fc_corr
+        print(f"  Mean SC-FC correlation across {fc_obj.shape[1]} subjects: {mean_sc_fc_corr:.4f}")
+        print(f"  Rejection threshold: {rejection_threshold:.4f}")
+    else:
+        # Simple: single SC-FC correlation
+        sc_fc_corr = pearsonr(fc_obj, subdiag(sc))[0]
+        rejection_threshold = 1.0 - sc_fc_corr
+        print(f"Calculating rejection threshold (simple mode)...")
+        print(f"  SC-FC correlation: {sc_fc_corr:.4f}")
+        print(f"  Rejection threshold: {rejection_threshold:.4f}")
 
     # Determine optimization class and parameters based on model type
     if model_type.lower() == 'homogeneous':

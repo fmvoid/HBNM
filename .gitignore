@@ -11,3 +11,5 @@ __pycache__/
 *.png
 experiments/INTs/INT_Outputs/*
 experiments/INTs/INT_Results/*
+cheat_sheet.md
+data/simulated_wc_data
